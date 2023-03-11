@@ -8,7 +8,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 
-from .const import DOMAIN
+from .const import ATTRIBUTION, DOMAIN
 
 _LOGGER = logging.Logger(__name__)
 
@@ -26,6 +26,8 @@ def setup_platform(
 
 class SengledLight(LightEntity):
     """A Sengled Light."""
+
+    _attr_attribution = ATTRIBUTION
 
     def update(self):
         """Fetch new data and update state."""
