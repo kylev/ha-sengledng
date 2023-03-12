@@ -4,7 +4,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from homeassistant.components.light import ColorMode, LightEntity
+from homeassistant.components.light import ColorMode, LightEntity, filter_supported_color_modes
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -19,9 +19,6 @@ class BaseLight(LightEntity):
     """Base Light"""
 
     _attr_attribution = ATTRIBUTION
-    _attr_color_mode = ColorMode.BRIGHTNESS
-    _attr_max_mireds = 370  # 1,000,000 divided by 2700 Kelvin = 370 Mireds
-    _attr_min_mireds = 154  # 1,000,000 divided by 6500 Kelvin = 154 Mireds
 
     def __init__(self, info: DiscoveryInfoType) -> None:
         self._unique_id = info["deviceUuid"]
@@ -30,7 +27,7 @@ class BaseLight(LightEntity):
         self._attr_brightness = int(info["brightness"])
         self._attr_is_on = info["switch"] == "1"
         self._attr_name = info["name"]
-        self._attr_supported_color_modes = set(
+        self._attr_supported_color_modes = filter_supported_color_modes(
             [COLOR_TRANSLATIONS[k] for k in info["supportAttributes"].split(",")]
         )
         self._attr_device_info = DeviceInfo(
@@ -49,6 +46,15 @@ class BaseLight(LightEntity):
         """Turn off light."""
         _LOGGER.info("Turn off?")
 
+    def __repr__(self) -> str:
+        return "<BaseLight name={!r} mode={!r} modes={!r} rgb={!r} temp={!r}>".format(
+            self._attr_name,
+            self._attr_color_mode,
+            self._attr_supported_color_modes,
+            self._attr_rgb_color,
+            self._attr_color_temp,
+        )
+
 
 class WhiteLight(BaseLight):
     """A Sengled wifi white light."""
@@ -63,18 +69,17 @@ COLOR_TRANSLATIONS = {
 
 class ColorLight(BaseLight):
     """A Sengled wifi color light."""
+    _attr_max_mireds = 370  # 1,000,000 divided by 2700 Kelvin = 370 Mireds
+    _attr_min_mireds = 154  # 1,000,000 divided by 6500 Kelvin = 154 Mireds
 
     def __init__(self, info: DiscoveryInfoType) -> None:
         super().__init__(info)
-        self._color_rgb = [int(rgbv) for rgbv in info["color"].split(":")]
-        self._attr_color_temperature = 154 + (216 * int(info["colorTemperature"]) / 100.0)
         if info["colorMode"] == "2":
             self._attr_color_mode = ColorMode.COLOR_TEMP
+            self._attr_color_temp = self._attr_min_mireds + ((int(info["colorTemperature"]) / 100.0) * (self._attr_max_mireds - self._attr_min_mireds))
         elif info["colorMode"] == "1":
             self._attr_color_mode = ColorMode.RGB
-
-        _LOGGER.warning("Yays %s", self._color_rgb)
-
+            self._attr_rgb_color = [int(rgbv) for rgbv in info["color"].split(":")]
 
 class UnknownLight(Exception):
     """When we can't handle a light."""
@@ -99,6 +104,7 @@ def setup_platform(
     discovery_info: DiscoveryInfoType | None = None,
 ) -> None:
     """Set up the Sengled platform."""
-    _LOGGER.warning("Entered light setup platform for %s %s", DOMAIN, discovery_info)
-
-    add_entities([build_light(discovery_info)])
+    # _LOGGER.warning("Entered light setup platform for %s %s", DOMAIN, discovery_info)
+    light = build_light(discovery_info)
+    _LOGGER.warning("Light built: %s", light)
+    add_entities([light])
