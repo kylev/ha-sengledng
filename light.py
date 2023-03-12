@@ -4,7 +4,11 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from homeassistant.components.light import ColorMode, LightEntity, filter_supported_color_modes
+from homeassistant.components.light import (
+    ColorMode,
+    LightEntity,
+    filter_supported_color_modes,
+)
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -14,6 +18,12 @@ from .const import ATTRIBUTION, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
+COLOR_TRANSLATIONS = {
+    "brightness": ColorMode.BRIGHTNESS,
+    "color": ColorMode.RGB,
+    "colorTemperature": ColorMode.COLOR_TEMP,
+}
+
 
 class BaseLight(LightEntity):
     """Base Light"""
@@ -21,6 +31,7 @@ class BaseLight(LightEntity):
     _attr_attribution = ATTRIBUTION
 
     def __init__(self, info: DiscoveryInfoType) -> None:
+        _LOGGER.debug("BaseLight init %r", info)
         self._unique_id = info["deviceUuid"]
 
         self._attr_available = info["online"] == "1"
@@ -59,27 +70,28 @@ class BaseLight(LightEntity):
 class WhiteLight(BaseLight):
     """A Sengled wifi white light."""
 
-
-COLOR_TRANSLATIONS = {
-    "brightness": ColorMode.BRIGHTNESS,
-    "color": ColorMode.RGB,
-    "colorTemperature": ColorMode.COLOR_TEMP,
-}
+    _attr_color_temp = 370  # 2700k, but per model?
 
 
 class ColorLight(BaseLight):
     """A Sengled wifi color light."""
-    _attr_max_mireds = 370  # 1,000,000 divided by 2700 Kelvin = 370 Mireds
-    _attr_min_mireds = 154  # 1,000,000 divided by 6500 Kelvin = 154 Mireds
+
+    # Figure out these ranges per light?
+    # _attr_max_mireds = 370  # 1,000,000 divided by 2700 Kelvin = 370 Mireds
+    # _attr_min_mireds = 154  # 1,000,000 divided by 6500 Kelvin = 154 Mireds
 
     def __init__(self, info: DiscoveryInfoType) -> None:
         super().__init__(info)
-        if info["colorMode"] == "2":
-            self._attr_color_mode = ColorMode.COLOR_TEMP
-            self._attr_color_temp = self._attr_min_mireds + ((int(info["colorTemperature"]) / 100.0) * (self._attr_max_mireds - self._attr_min_mireds))
-        elif info["colorMode"] == "1":
+        self._attr_color_temp = self._attr_max_mireds - (
+            (int(info["colorTemperature"]) / 100.0)
+            * (self._attr_max_mireds - self._attr_min_mireds)
+        )
+        self._attr_rgb_color = [int(rgbv) for rgbv in info["color"].split(":")]
+        if info["colorMode"] == "1":
             self._attr_color_mode = ColorMode.RGB
-            self._attr_rgb_color = [int(rgbv) for rgbv in info["color"].split(":")]
+        elif info["colorMode"] == "2":
+            self._attr_color_mode = ColorMode.COLOR_TEMP
+
 
 class UnknownLight(Exception):
     """When we can't handle a light."""
