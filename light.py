@@ -2,9 +2,11 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 from homeassistant.components.light import ColorMode, LightEntity
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 
@@ -18,30 +20,38 @@ class BaseLight(LightEntity):
 
     _attr_attribution = ATTRIBUTION
     _attr_color_mode = ColorMode.BRIGHTNESS
+    _attr_max_mireds = 370  # 1,000,000 divided by 2700 Kelvin = 370 Mireds
+    _attr_min_mireds = 154  # 1,000,000 divided by 6500 Kelvin = 154 Mireds
 
     def __init__(self, info: DiscoveryInfoType) -> None:
-        self._attr_available = info["online"] == "1"
-        self._attr_brightness = int(info["brightness"])
-
-        self._attr_name = info["name"]
         self._unique_id = info["deviceUuid"]
 
-        # self._sg_animations = info["deviceAnimations"]
-        self._sg_category = info["category"]
-        self._sg_type = info["typeCode"]
-
-    # def __str__(self) -> str:
-    #     return "Bulb {} ({}): {}".format(self._type, self._uuid, str(self._attributes))
+        self._attr_available = info["online"] == "1"
+        self._attr_brightness = int(info["brightness"])
+        self._attr_is_on = info["switch"] == "1"
+        self._attr_name = info["name"]
+        self._attr_supported_color_modes = set(
+            [COLOR_TRANSLATIONS[k] for k in info["supportAttributes"].split(",")]
+        )
+        self._attr_device_info = DeviceInfo(
+            manufacturer="Sengled", model=info["typeCode"], sw_version=info["version"]
+        )
 
     def update(self):
         """Fetch new data and update state."""
         _LOGGER.info("Update called")
 
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        """Turn on light."""
+        _LOGGER.info("Turn on?")
 
-class WhiteLight(BaseLight, LightEntity):
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        """Turn off light."""
+        _LOGGER.info("Turn off?")
+
+
+class WhiteLight(BaseLight):
     """A Sengled wifi white light."""
-
-    _attr_supported_color_modes = {ColorMode.BRIGHTNESS}
 
 
 COLOR_TRANSLATIONS = {
@@ -56,12 +66,14 @@ class ColorLight(BaseLight):
 
     def __init__(self, info: DiscoveryInfoType) -> None:
         super().__init__(info)
-
         self._color_rgb = [int(rgbv) for rgbv in info["color"].split(":")]
-        self._attr_supported_color_modes = set(
-            [COLOR_TRANSLATIONS[k] for k in info["supportAttributes"].split(",")]
-        )
-        _LOGGER.warning("Yays %s", self._attr_supported_color_modes)
+        self._attr_color_temperature = 154 + (216 * int(info["colorTemperature"]) / 100.0)
+        if info["colorMode"] == "2":
+            self._attr_color_mode = ColorMode.COLOR_TEMP
+        elif info["colorMode"] == "1":
+            self._attr_color_mode = ColorMode.RGB
+
+        _LOGGER.warning("Yays %s", self._color_rgb)
 
 
 class UnknownLight(Exception):
