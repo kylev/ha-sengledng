@@ -1,25 +1,11 @@
-"""API immplmentation for SengledNG"""
+"""API implmentation for SengledNG"""
+import aiohttp
 from http import HTTPStatus
 import logging
-import uuid
-
-import async_timeout
-import paho.mqtt.client as mqtt
-
-from homeassistant.helpers.aiohttp_client import async_create_clientsession
-from homeassistant.core import HomeAssistant
-
-_LOGGER = logging.getLogger(__name__)
-
-import uuid
-
-import aiohttp
-import paho.mqtt.client as mqtt
 from typing import Any, List
+import uuid
 
 from homeassistant.helpers.typing import DiscoveryInfoType
-
-from .light import build_light
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -52,7 +38,7 @@ class API:
         self._password = password
         self._cookiejar = aiohttp.CookieJar()
         self._http = aiohttp.ClientSession(cookie_jar=self._cookiejar)
-        self._jsession_id: str = None
+        self._jsession_id: str | None = None
 
     async def async_setup(self):
         await self._async_login()
@@ -70,7 +56,7 @@ class API:
         }
 
         async with self._http.post(url, json=payload) as resp:
-            if resp.status != 200:
+            if resp.status != HTTPStatus.OK:
                 raise AuthError(resp.headers)
             data = await resp.json()
             if data["ret"] != 0:
@@ -86,6 +72,7 @@ class API:
             self._inception_url = data["inceptionAddr"]
 
     async def async_list_devices(self) -> List[DiscoveryInfoType]:
+        """Get a list of HASS-friendly discovered devices."""
         url = "https://life2.cloud.sengled.com/life2/device/list.json"
         async with self._http.post(url) as resp:
             data = await resp.json()
@@ -94,4 +81,5 @@ class API:
             return [_hassify_discovery(d) for d in data["deviceList"]]
 
     async def shutdown(self):
+        """Shutdown and tidy up."""
         await self._http.close()
