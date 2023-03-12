@@ -32,12 +32,14 @@ class BaseLight(LightEntity):
 
     def __init__(self, info: DiscoveryInfoType) -> None:
         _LOGGER.debug("BaseLight init %r", info)
-        self._unique_id = info["deviceUuid"]
+        self._device_id = info["deviceUuid"]
 
         self._attr_available = info["online"] == "1"
         self._attr_brightness = int(info["brightness"])
         self._attr_is_on = info["switch"] == "1"
         self._attr_name = info["name"]
+        self._attr_unique_id = info["deviceUuid"]
+
         self._attr_supported_color_modes = filter_supported_color_modes(
             [COLOR_TRANSLATIONS[k] for k in info["supportAttributes"].split(",")]
         )
