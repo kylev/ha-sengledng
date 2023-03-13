@@ -102,15 +102,16 @@ class API:
             )
             client.subscribe("$SYS/#")
             # client.subscribe("wifielement/+/update")
-            client.subscribe("wifielement/80:A0:36:E1:89:6F/update")
+            # client.subscribe("wifielement/80:A0:36:E1:89:6F/update")
             # client.subscribe("wifielement/#")
 
         def on_message(_client, userdata, msg):
-            payload = json.loads(msg.payload)
-            _LOGGER.debug("MQTT message(%s): %r", msg.topic, payload)
-            if isinstance(payload, dict):
-                if payload["type"] not in ["deviceRssi"]:
-                    pass
+            return
+            if msg.topic.startswith("SYS"):
+                payload = json.loads(msg.payload)
+                _LOGGER.warning(
+                    "Unexpected MQTT system message(%s): %r", msg.topic, payload
+                )
 
         def on_subscribe(client, userdata, mid, granted_qos):
             _LOGGER.info("MQTT subscribed %s %s", mid, granted_qos)
@@ -130,22 +131,6 @@ class API:
 
         self._mqtt.connect_async(self._inception_url.hostname, self._inception_url.port)
         self._mqtt.loop_start()
-        print(str(self._mqtt))
-
-        sink_mac = "80:A0:36:E2:2E:47"
-        result = self._mqtt.publish(
-            "wifielement/{}/update".format(sink_mac),
-            json.dumps(
-                {
-                    "dn": sink_mac,
-                    "type": "switch",
-                    "value": "0",
-                    "time": int(time.time() * 1000),
-                }
-            ),
-        )
-        # result.wait_for_publish()
-        _LOGGER.debug("MQTT published %s", result.mid)
 
     async def async_list_devices(self) -> List[DiscoveryInfoType]:
         """Get a list of HASS-friendly discovered devices."""
@@ -155,6 +140,13 @@ class API:
             # _LOGGER.debug("Incoming async_list_devices data %s", data)
             # return [_hassify_discovery(d) for d in data["deviceList"]]
             return [_hassify_discovery(d) for d in data["deviceList"]]
+
+    def subscribe_light(self, light):
+        """Subscribe a light to its updates."""
+        self._mqtt.message_callback_add(
+            "wifielement/{}/#".format(light.unique_id), light.on_message
+        )
+        self._mqtt.subscribe("wifielement/{}/update".format(light.unique_id))
 
     async def shutdown(self):
         """Shutdown and tidy up."""
