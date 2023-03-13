@@ -1,11 +1,17 @@
 """API implmentation for SengledNG"""
 import aiohttp
 from http import HTTPStatus
+import json
 import logging
+import time
 from typing import Any, List
+from urllib.parse import urlparse
 import uuid
 
+from paho.mqtt import client as mqtt
+
 from homeassistant.helpers.typing import DiscoveryInfoType
+from homeassistant.components.mqtt.client import MqttClientSetup
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -39,9 +45,13 @@ class API:
         self._cookiejar = aiohttp.CookieJar()
         self._http = aiohttp.ClientSession(cookie_jar=self._cookiejar)
         self._jsession_id: str | None = None
+        self._mqtt = mqtt.Client(transport="websockets")
 
     async def async_setup(self):
+        """Perform setup."""
         await self._async_login()
+        await self._async_get_server_info()
+        await self._async_setup_mqtt()
 
     async def _async_login(self):
         url = "https://ucenter.cloud.sengled.com/user/app/customer/v2/AuthenCross.json"
@@ -68,8 +78,74 @@ class API:
         url = "https://life2.cloud.sengled.com/life2/server/getServerInfo.json"
         async with self._http.post(url) as resp:
             data = await resp.json()
-            self._jbalancer_url = data["jbalancerAddr"]
-            self._inception_url = data["inceptionAddr"]
+            self._jbalancer_url = urlparse(data["jbalancerAddr"])
+            self._inception_url = urlparse(data["inceptionAddr"])
+
+    async def _async_setup_mqtt(self):
+        """Setup up MQTT client."""
+        _LOGGER.warning(
+            "MQTT setup with %s %r %r",
+            self._jsession_id,
+            self._inception_url,
+            self._jbalancer_url,
+        )
+
+        # self._mqtt.reinitialise(client_id="{}@lifeApp".format(self._jsession_id))
+        self._mqtt = mqtt.Client(
+            client_id="{}@lifeApp".format(self._jsession_id),
+            transport="websockets",
+        )
+
+        def on_connect(client, userdata, flags, rc):
+            _LOGGER.info(
+                "MQTT connected with result code %s %s %s", userdata, flags, rc
+            )
+            client.subscribe("$SYS/#")
+            # client.subscribe("wifielement/+/update")
+            client.subscribe("wifielement/80:A0:36:E1:89:6F/update")
+            # client.subscribe("wifielement/#")
+
+        def on_message(_client, userdata, msg):
+            payload = json.loads(msg.payload)
+            _LOGGER.debug("MQTT message(%s): %r", msg.topic, payload)
+            if isinstance(payload, dict):
+                if payload["type"] not in ["deviceRssi"]:
+                    pass
+
+        def on_subscribe(client, userdata, mid, granted_qos):
+            _LOGGER.info("MQTT subscribed %s %s", mid, granted_qos)
+
+        self._mqtt.on_connect = on_connect
+        self._mqtt.on_message = on_message
+        self._mqtt.on_subscribe = on_subscribe
+        self._mqtt.ws_set_options(
+            path=self._inception_url.path,
+            headers={
+                "Cookie": "JSESSIONID={}".format(self._jsession_id),
+                "X-Requested-With": "com.sengled.life2",
+            },
+        )
+        self._mqtt.tls_set_context()
+        self._mqtt.enable_logger(_LOGGER)
+
+        self._mqtt.connect_async(self._inception_url.hostname, self._inception_url.port)
+        self._mqtt.loop_start()
+        print(str(self._mqtt))
+
+        sink_mac = "80:A0:36:E2:2E:47"
+        result = self._mqtt.publish(
+            "wifielement/{}/update".format(sink_mac),
+            json.dumps(
+                {
+                    "dn": sink_mac,
+                    "type": "switch",
+                    "value": "0",
+                    "time": int(time.time() * 1000),
+                }
+            ),
+        )
+        # result.wait_for_publish()
+        _LOGGER.debug("MQTT published %s", result.mid)
 
     async def async_list_devices(self) -> List[DiscoveryInfoType]:
         """Get a list of HASS-friendly discovered devices."""
