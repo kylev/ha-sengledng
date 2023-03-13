@@ -2,7 +2,7 @@
 
 **This is incomplete alpha code.**
 
-This is a [https://hacs.xyz/](HACS) integration to connect Sengled Wifi lights to [Home Assistant](https://www.home-assistant.io/). It uses the modernized Platform/Entity and MQTT programming interfaces, but is based on [jfarmer08](https://github.com/jfarmer08)'s [excellent initial work](https://github.com/jfarmer08/ha-sengledapi).
+This is a [HACS](https://hacs.xyz/) integration to connect Sengled Wifi lights to [Home Assistant](https://www.home-assistant.io/). It uses the modernized Platform/Entity and MQTT programming interfaces, but is based on [jfarmer08](https://github.com/jfarmer08)'s [excellent initial work](https://github.com/jfarmer08/ha-sengledapi).
 
 Tested with:
 
