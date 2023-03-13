@@ -5,7 +5,7 @@ import json
 import logging
 import time
 from typing import Any, List
-from urllib.parse import urlparse
+from urllib import parse
 import uuid
 
 from paho.mqtt import client as mqtt
@@ -39,12 +39,15 @@ class AuthError(Exception):
 class API:
     """API for Sengled"""
 
+    _jbalancer_url: parse.ParseResult | None = None
+    _jsession_id: str | None = None
+    _inception_url: parse.ParseResult | None = None
+
     def __init__(self, username: str, password: str) -> None:
         self._username = username
         self._password = password
         self._cookiejar = aiohttp.CookieJar()
         self._http = aiohttp.ClientSession(cookie_jar=self._cookiejar)
-        self._jsession_id: str | None = None
         self._mqtt = mqtt.Client(transport="websockets")
 
     async def async_setup(self):
@@ -78,8 +81,8 @@ class API:
         url = "https://life2.cloud.sengled.com/life2/server/getServerInfo.json"
         async with self._http.post(url) as resp:
             data = await resp.json()
-            self._jbalancer_url = urlparse(data["jbalancerAddr"])
-            self._inception_url = urlparse(data["inceptionAddr"])
+            self._jbalancer_url = parse.urlparse(data["jbalancerAddr"])
+            self._inception_url = parse.urlparse(data["inceptionAddr"])
 
     async def _async_setup_mqtt(self):
         """Setup up MQTT client."""
