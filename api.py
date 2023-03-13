@@ -3,7 +3,6 @@ import aiohttp
 from http import HTTPStatus
 import json
 import logging
-import time
 from typing import Any, List
 from urllib import parse
 import uuid
@@ -11,7 +10,7 @@ import uuid
 from paho.mqtt import client as mqtt
 
 from homeassistant.helpers.typing import DiscoveryInfoType
-from homeassistant.components.mqtt.client import MqttClientSetup
+
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -39,9 +38,9 @@ class AuthError(Exception):
 class API:
     """API for Sengled"""
 
+    _inception_url: parse.ParseResult | None = None
     _jbalancer_url: parse.ParseResult | None = None
     _jsession_id: str | None = None
-    _inception_url: parse.ParseResult | None = None
 
     def __init__(self, username: str, password: str) -> None:
         self._username = username
@@ -86,22 +85,20 @@ class API:
 
     async def _async_setup_mqtt(self):
         """Setup up MQTT client."""
-        _LOGGER.warning(
-            "MQTT setup with %s %r %r",
+        _LOGGER.debug(
+            "MQTT setup with %s %r",
             self._jsession_id,
             self._inception_url,
-            self._jbalancer_url,
         )
 
-        # self._mqtt.reinitialise(client_id="{}@lifeApp".format(self._jsession_id))
         self._mqtt = mqtt.Client(
             client_id="{}@lifeApp".format(self._jsession_id),
             transport="websockets",
         )
 
-        def on_connect(client, userdata, flags, rc):
+        def on_connect(client, userdata, flags, result_code):
             _LOGGER.info(
-                "MQTT connected with result code %s %s %s", userdata, flags, rc
+                "MQTT connected with result code %s %s %s", userdata, flags, result_code
             )
             client.subscribe("$SYS/#")
             # client.subscribe("wifielement/+/update")
@@ -116,7 +113,7 @@ class API:
                 )
 
         def on_subscribe(client, userdata, mid, granted_qos):
-            _LOGGER.info("MQTT subscribed %s %s", mid, granted_qos)
+            _LOGGER.debug("MQTT subscribed %s %s", userdata, mid)
 
         self._mqtt.on_connect = on_connect
         self._mqtt.on_message = on_message
@@ -140,8 +137,6 @@ class API:
         url = "https://life2.cloud.sengled.com/life2/device/list.json"
         async with self._http.post(url) as resp:
             data = await resp.json()
-            # _LOGGER.debug("Incoming async_list_devices data %s", data)
-            # return [_hassify_discovery(d) for d in data["deviceList"]]
             return [_hassify_discovery(d) for d in data["deviceList"]]
 
     def subscribe_light(self, light):

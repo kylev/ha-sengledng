@@ -28,9 +28,9 @@ COLOR_TRANSLATIONS = {
 COLOR_SOLO_UPDATES = {"brightness", "color"}
 
 
-def percent_to_mireds(pct_str: str, max: int, min: int) -> int:
+def percent_to_mireds(pct_str: str, max_mireds: int, min_mireds: int) -> int:
     """Convert Sengled's brightness percentage to mireds given the light's range."""
-    return int(max - ((int(pct_str) / 100.0) * (max - min)))
+    return int(max_mireds - ((int(pct_str) / 100.0) * (max_mireds - min_mireds)))
 
 
 class BaseLight(LightEntity):
@@ -124,9 +124,6 @@ class ColorLight(BaseLight):
     # _attr_max_mireds = 370  # 1,000,000 divided by 2700 Kelvin = 370 Mireds
     # _attr_min_mireds = 154  # 1,000,000 divided by 6500 Kelvin = 154 Mireds
 
-    def __init__(self, info: DiscoveryInfoType) -> None:
-        super().__init__(info)
-
     @property
     def rgb_color(self) -> tuple[int, int, int] | None:
         return [int(rgbv) for rgbv in self._light["color"].split(":")]
@@ -145,10 +142,6 @@ class ColorLight(BaseLight):
             return ColorMode.RGB
         elif self._light["colorMode"] == "2":
             return ColorMode.COLOR_TEMP
-
-    def _handle_packet(self, packet):
-        """Retouch the color light packet."""
-        return super()._handle_packet(packet)
 
 
 class UnknownLight(Exception):
