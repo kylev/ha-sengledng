@@ -14,7 +14,7 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 
-from .const import ATTRIBUTION, DOMAIN
+from .const import ATTRIBUTION
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -49,15 +49,15 @@ class BaseLight(LightEntity):
 
     def update(self):
         """Fetch new data and update state."""
-        _LOGGER.info("Update called")
+        _LOGGER.debug("Update %s", self.name)
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn on light."""
-        _LOGGER.info("Turn on?")
+        _LOGGER.debug("Turn on %s", self.name)
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn off light."""
-        _LOGGER.info("Turn off?")
+        _LOGGER.debug("Turn off %s", self.name)
 
     def __repr__(self) -> str:
         return "<BaseLight name={!r} mode={!r} modes={!r} rgb={!r} temp={!r}>".format(
@@ -101,7 +101,6 @@ class UnknownLight(Exception):
 
 def build_light(packet: DiscoveryInfoType) -> BaseLight:
     """Factory for bulbs."""
-    _LOGGER.debug("Building light %s", packet)
     match packet["typeCode"]:
         case "W21-N13":
             return ColorLight(packet)
