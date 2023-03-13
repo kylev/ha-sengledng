@@ -106,7 +106,6 @@ class API:
             # client.subscribe("wifielement/#")
 
         def on_message(_client, userdata, msg):
-            return
             if msg.topic.startswith("SYS"):
                 payload = json.loads(msg.payload)
                 _LOGGER.warning(
@@ -127,9 +126,10 @@ class API:
             },
         )
         self._mqtt.tls_set_context()
-        self._mqtt.enable_logger(_LOGGER)
+        self._mqtt.enable_logger()
 
-        self._mqtt.connect_async(self._inception_url.hostname, self._inception_url.port)
+        # TODO Figure out how to use connect_async() without sometimes swallowing the first subscribe calls...
+        self._mqtt.connect(self._inception_url.hostname, self._inception_url.port)
         self._mqtt.loop_start()
 
     async def async_list_devices(self) -> List[DiscoveryInfoType]:
