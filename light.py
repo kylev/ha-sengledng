@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 from typing import Any
 
 from homeassistant.components.light import (
@@ -58,24 +59,30 @@ class BaseLight(LightEntity):
         if "online" in info:
             self._attr_available = info["online"] == "1"
         if "brightness" in info:
-            self._attr_brightness = int(info["brightness"])
+            self._attr_brightness = math.ceil(int(info["brightness"]) / 100 * 255)
+            if "_update" in info:
+                self._attr_is_on = True
         if "switch" in info:
             self._attr_is_on = info["switch"] == "1"
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn on light."""
-        _LOGGER.debug("Turn on %s", self.name)
+        _LOGGER.debug("Turn on %s %r", self.name, kwargs)
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn off light."""
-        _LOGGER.debug("Turn off %s", self.name)
+        _LOGGER.debug("Turn off %s %r", self.name, kwargs)
 
     def on_message(self, _mqtt_client, _userdata, msg):
         """Handle a message from upstream."""
         # _LOGGER.debug("Bulb(%s) message %s", self.name, msg)
-        packet = {}
+        packet = {"_update": True}
         for item in json.loads(msg.payload):
             packet[item["type"]] = item["value"]
+        # if len(packet) == 1 and "switch" not in packet:
+        #     # TODO Maybe just on "direct set to on" commands?
+        #     packet["switch"] = "1"
+
         self._store_stuff(packet)
         self.schedule_update_ha_state()
         _LOGGER.debug("Bulb(%s) message %s", self.name, packet)
@@ -106,9 +113,9 @@ class ColorLight(BaseLight):
     def __init__(self, info: DiscoveryInfoType) -> None:
         super().__init__(info)
 
-        self._attr_color_temp = self._attr_max_mireds - (
-            (int(info["colorTemperature"]) / 100.0)
-            * (self._attr_max_mireds - self._attr_min_mireds)
+    def _pct_to_mireds(self, pct_str: str):
+        return self._attr_max_mireds - (
+            (int(pct_str) / 100.0) * (self._attr_max_mireds - self._attr_min_mireds)
         )
 
     def _store_stuff(self, info):
@@ -117,6 +124,14 @@ class ColorLight(BaseLight):
 
         if "color" in info:
             self._attr_rgb_color = [int(rgbv) for rgbv in info["color"].split(":")]
+            if "_update" in info:
+                self._attr_color_mode = ColorMode.RGB
+                self._attr_is_on = True
+        if "colorTemperature" in info:
+            self._attr_color_temp = self._pct_to_mireds(info["colorTemperature"])
+            if "_update" in info:
+                self._attr_color_mode = ColorMode.COLOR_TEMP
+                self._attr_is_on = True
         if "colorMode" in info:
             if info["colorMode"] == "1":
                 self._attr_color_mode = ColorMode.RGB
