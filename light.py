@@ -7,6 +7,9 @@ import math
 from typing import Any
 
 from homeassistant.components.light import (
+    ATTR_BRIGHTNESS,
+    ATTR_COLOR_TEMP,
+    ATTR_RGB_COLOR,
     ColorMode,
     LightEntity,
     filter_supported_color_modes,
@@ -16,6 +19,7 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 
+from .api import API
 from .const import ATTRIBUTION, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
@@ -28,9 +32,17 @@ COLOR_TRANSLATIONS = {
 COLOR_SOLO_UPDATES = {"brightness", "color"}
 
 
-def percent_to_mireds(pct_str: str, max_mireds: int, min_mireds: int) -> int:
+def decode_color_temp(value_pct: str, min_mireds: int, max_mireds: int) -> int:
     """Convert Sengled's brightness percentage to mireds given the light's range."""
-    return int(max_mireds - ((int(pct_str) / 100.0) * (max_mireds - min_mireds)))
+    # return 370
+    return math.ceil(
+        max_mireds - ((int(value_pct) / 100.0) * (max_mireds - min_mireds))
+    )
+
+
+def encode_color_temp(value_mireds: int, min_mireds: int, max_mireds: int) -> str:
+    """Convert brightness from HA to Sengled."""
+    return str(math.ceil((value_mireds - min_mireds) / (max_mireds - min_mireds) * 100))
 
 
 class BaseLight(LightEntity):
@@ -40,8 +52,9 @@ class BaseLight(LightEntity):
     _attr_attribution = ATTRIBUTION
     _attr_should_poll = False
 
-    def __init__(self, info: DiscoveryInfoType) -> None:
+    def __init__(self, api: API, info: DiscoveryInfoType) -> None:
         _LOGGER.debug("BaseLight init %r", info)
+        self._api = api
         self._light = info
         self._device_id = info["deviceUuid"]
         self._attr_unique_id = info["deviceUuid"]
@@ -75,25 +88,63 @@ class BaseLight(LightEntity):
     def _handle_packet(self, packet):
         """Update state"""
         _LOGGER.debug("BaseLight %s handling packet %s", self.name, packet)
-        if len(packet) == 1:
-            for attribute in COLOR_SOLO_UPDATES:
-                if attribute in packet:
-                    packet["switch"] = "1"
+        if len(packet) == 1 or packet.get("switch") == "1":
+            packet["switch"] = "1"
+            if "color" in packet:
+                packet["colorMode"] = "1"
+            if "colorTemperature" in packet:
+                packet["colorMode"] = "2"
 
         self._light.update(packet)
 
-    async def async_turn_on(self, **kwargs: Any) -> None:
+    def turn_on(self, **kwargs: Any) -> None:
         """Turn on light."""
         _LOGGER.debug("Turn on %s %r", self.name, kwargs)
 
-    async def async_turn_off(self, **kwargs: Any) -> None:
+        message = {}
+        if len(kwargs) == 0:
+            message.update({"type": "switch", "value": "1"})
+        if ATTR_BRIGHTNESS in kwargs:
+            message.update(
+                {"type": "brightness", "value": str(min(kwargs[ATTR_BRIGHTNESS], 100))}
+            )
+        if ATTR_RGB_COLOR in kwargs:
+            message.update(
+                {
+                    "type": "color",
+                    "value": ":".join([str(v) for v in kwargs[ATTR_RGB_COLOR]]),
+                }
+            )
+        if ATTR_COLOR_TEMP in kwargs:
+            message.update(
+                {
+                    "type": "colorTemperature",
+                    "value": encode_color_temp(
+                        kwargs[ATTR_COLOR_TEMP], self.min_mireds, self.max_mireds
+                    ),
+                }
+            )  # TODO
+
+        if len(message) == 0:
+            _LOGGER.warning("Empty action from turn_on command: %r", kwargs)
+        self._api.send_message(self.unique_id, message)
+
+    def turn_off(self, **kwargs: Any) -> None:
         """Turn off light."""
         _LOGGER.debug("Turn off %s %r", self.name, kwargs)
+        self._api.send_message(self.unique_id, {"type": "switch", "value": "0"})
 
     def on_message(self, _mqtt_client, _userdata, msg):
         """Handle a message from upstream."""
+        payload = json.loads(msg.payload)
+        if not isinstance(payload, list):
+            _LOGGER.warning("Strange message %r", payload)
+            return
+
         packet = {}
-        for item in json.loads(msg.payload):
+        for item in payload:
+            if len(item) == 0:
+                continue
             packet[item["type"]] = item["value"]
 
         self._handle_packet(packet)
@@ -130,10 +181,10 @@ class ColorLight(BaseLight):
 
     @property
     def color_temp(self) -> int | None:
-        return percent_to_mireds(
+        return decode_color_temp(
             self._light["colorTemperature"],
-            self._attr_min_mireds,
-            self._attr_max_mireds,
+            self.min_mireds,
+            self.max_mireds,
         )
 
     @property
@@ -148,13 +199,13 @@ class UnknownLight(Exception):
     """When we can't handle a light."""
 
 
-def build_light(packet: DiscoveryInfoType) -> BaseLight:
+def build_light(api: API, packet: DiscoveryInfoType) -> BaseLight:
     """Factory for bulbs."""
     match packet["typeCode"]:
         case "W21-N13":
-            return ColorLight(packet)
+            return ColorLight(api, packet)
         case "W21-N11":
-            return WhiteLight(packet)
+            return WhiteLight(api, packet)
         case _:
             raise UnknownLight(str(packet))
 
@@ -168,7 +219,7 @@ def setup_platform(
     """Set up the Sengled platform."""
     api = hass.data[DOMAIN]
 
-    light = build_light(discovery_info)
+    light = build_light(api, discovery_info)
     api.subscribe_light(light)
     _LOGGER.debug("Light built: %r", light)
     add_entities([light])

@@ -3,6 +3,7 @@ import aiohttp
 from http import HTTPStatus
 import json
 import logging
+import time
 from typing import Any, List
 from urllib import parse
 import uuid
@@ -145,6 +146,13 @@ class API:
             "wifielement/{}/#".format(light.unique_id), light.on_message
         )
         self._mqtt.subscribe("wifielement/{}/update".format(light.unique_id))
+
+    def send_message(self, device_id: str, message: Any):
+        """Send a MQTT message to central control."""
+        self._mqtt.publish(
+            "wifielement/{}/update".format(device_id),
+            json.dumps([message]),
+        )
 
     async def shutdown(self):
         """Shutdown and tidy up."""
