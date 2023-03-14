@@ -42,7 +42,7 @@ def decode_color_temp(value_pct: str, min_mireds: int, max_mireds: int) -> int:
 
 def encode_color_temp(value_mireds: int, min_mireds: int, max_mireds: int) -> str:
     """Convert brightness from HA to Sengled."""
-    return str(math.ceil((value_mireds - min_mireds) / (max_mireds - min_mireds) * 100))
+    return str(math.ceil((max_mireds - value_mireds) / (max_mireds - min_mireds) * 100))
 
 
 class BaseLight(LightEntity):
@@ -88,8 +88,9 @@ class BaseLight(LightEntity):
     def _handle_packet(self, packet):
         """Update state"""
         _LOGGER.debug("BaseLight %s handling packet %s", self.name, packet)
-        if len(packet) == 1 or packet.get("switch") == "1":
-            packet["switch"] = "1"
+        if len(packet) == 1:
+            if "switch" not in packet:
+                packet["switch"] = "1"
             if "color" in packet:
                 packet["colorMode"] = "1"
             if "colorTemperature" in packet:
@@ -103,27 +104,24 @@ class BaseLight(LightEntity):
 
         message = {}
         if len(kwargs) == 0:
-            message.update({"type": "switch", "value": "1"})
+            message = {"type": "switch", "value": "1"}
         if ATTR_BRIGHTNESS in kwargs:
-            message.update(
-                {"type": "brightness", "value": str(min(kwargs[ATTR_BRIGHTNESS], 100))}
-            )
+            message = {
+                "type": "brightness",
+                "value": str(math.ceil(kwargs[ATTR_BRIGHTNESS] / 255 * 100)),
+            }
         if ATTR_RGB_COLOR in kwargs:
-            message.update(
-                {
-                    "type": "color",
-                    "value": ":".join([str(v) for v in kwargs[ATTR_RGB_COLOR]]),
-                }
-            )
+            message = {
+                "type": "color",
+                "value": ":".join([str(v) for v in kwargs[ATTR_RGB_COLOR]]),
+            }
         if ATTR_COLOR_TEMP in kwargs:
-            message.update(
-                {
-                    "type": "colorTemperature",
-                    "value": encode_color_temp(
-                        kwargs[ATTR_COLOR_TEMP], self.min_mireds, self.max_mireds
-                    ),
-                }
-            )  # TODO
+            message = {
+                "type": "colorTemperature",
+                "value": encode_color_temp(
+                    kwargs[ATTR_COLOR_TEMP], self.min_mireds, self.max_mireds
+                ),
+            }
 
         if len(message) == 0:
             _LOGGER.warning("Empty action from turn_on command: %r", kwargs)
@@ -137,6 +135,7 @@ class BaseLight(LightEntity):
     def on_message(self, _mqtt_client, _userdata, msg):
         """Handle a message from upstream."""
         payload = json.loads(msg.payload)
+        _LOGGER.debug("On Message %r", payload)
         if not isinstance(payload, list):
             _LOGGER.warning("Strange message %r", payload)
             return
@@ -191,7 +190,7 @@ class ColorLight(BaseLight):
     def color_mode(self) -> ColorMode | str | None:
         if self._light["colorMode"] == "1":
             return ColorMode.RGB
-        elif self._light["colorMode"] == "2":
+        if self._light["colorMode"] == "2":
             return ColorMode.COLOR_TEMP
 
 

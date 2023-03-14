@@ -149,6 +149,7 @@ class API:
 
     def send_message(self, device_id: str, message: Any):
         """Send a MQTT message to central control."""
+        message.update({"dn": device_id, "time": int(time.time() * 1000)})
         self._mqtt.publish(
             "wifielement/{}/update".format(device_id),
             json.dumps([message]),
