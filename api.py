@@ -98,9 +98,11 @@ class API:
             transport="websockets",
         )
 
-        def on_connect(client, userdata, flags, result_code):
+        def on_connect(client, _userdata, flags, result_code):
             _LOGGER.info(
-                "MQTT connected with result code %s %s %s", userdata, flags, result_code
+                "MQTT connected with result code %s %s",
+                flags,
+                mqtt.connack_string(result_code),
             )
             client.subscribe("$SYS/#")
             # client.subscribe("wifielement/#")  # Yikes
@@ -109,18 +111,22 @@ class API:
             # client.subscribe("wifielement/+/consumption")
             # client.subscribe("wifielement/+/consumptionTime")
 
-        def on_disconnect(client, userdata, result_code):
-            _LOGGER.warning("MQTT disconnected: %s", result_code)
+        def on_connect_fail(_client, _userdata):
+            _LOGGER.warning("MQTT connection failed")
 
-        def on_subscribe(client, userdata, mid, granted_qos):
+        def on_disconnect(_client, _userdata, result_code):
+            _LOGGER.warning("MQTT disconnected: %s", mqtt.error_string(result_code))
+
+        def on_subscribe(_client, _userdata, mid, _granted_qos):
             _LOGGER.debug("MQTT subscribed MID:%s", mid)
 
-        def on_message(_client, userdata, msg):
+        def on_message(_client, _userdata, msg):
             if msg.topic.startswith("SYS"):
                 payload = json.loads(msg.payload)
                 _LOGGER.warning("MQTT system message(%s): %r", msg.topic, payload)
 
         self._mqtt.on_connect = on_connect
+        self._mqtt.on_connect_fail = on_connect_fail
         self._mqtt.on_disconnect = on_disconnect
         self._mqtt.on_message = on_message
         self._mqtt.on_subscribe = on_subscribe
