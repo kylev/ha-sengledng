@@ -9,9 +9,11 @@ from typing import Any
 from homeassistant.components.light import (
     ATTR_BRIGHTNESS,
     ATTR_COLOR_TEMP,
+    ATTR_EFFECT,
     ATTR_RGB_COLOR,
     ColorMode,
     LightEntity,
+    LightEntityFeature,
     filter_supported_color_modes,
 )
 from homeassistant.core import HomeAssistant
@@ -85,19 +87,6 @@ class BaseLight(LightEntity):
     def brightness(self) -> int | None:
         return math.ceil(int(self._light["brightness"]) / 100 * 255)
 
-    def _handle_packet(self, packet):
-        """Update state"""
-        _LOGGER.debug("BaseLight %s handling packet %s", self.name, packet)
-        if len(packet) == 1:
-            if "switch" not in packet:
-                packet["switch"] = "1"
-            if "color" in packet:
-                packet["colorMode"] = "1"
-            if "colorTemperature" in packet:
-                packet["colorMode"] = "2"
-
-        self._light.update(packet)
-
     def turn_on(self, **kwargs: Any) -> None:
         """Turn on light."""
         _LOGGER.debug("Turn on %s %r", self.name, kwargs)
@@ -122,6 +111,8 @@ class BaseLight(LightEntity):
                     kwargs[ATTR_COLOR_TEMP], self.min_mireds, self.max_mireds
                 ),
             }
+        if ATTR_EFFECT in kwargs:
+            message = {"type": kwargs[ATTR_EFFECT], "value": "1"}
 
         if len(message) == 0:
             _LOGGER.warning("Empty action from turn_on command: %r", kwargs)
@@ -148,6 +139,19 @@ class BaseLight(LightEntity):
 
         self._handle_packet(packet)
         self.schedule_update_ha_state()
+
+    def _handle_packet(self, packet):
+        """Update state"""
+        _LOGGER.debug("BaseLight %s handling packet %s", self.name, packet)
+        if len(packet) == 1:
+            if "switch" not in packet:
+                packet["switch"] = "1"
+            if "color" in packet:
+                packet["colorMode"] = "1"
+            if "colorTemperature" in packet:
+                packet["colorMode"] = "2"
+
+        self._light.update(packet)
 
     def __repr__(self) -> str:
         return "<BaseLight name={!r} mode={!r} modes={!r} rgb={!r} temp={!r}>".format(
@@ -192,6 +196,21 @@ class ColorLight(BaseLight):
             return ColorMode.RGB
         if self._light["colorMode"] == "2":
             return ColorMode.COLOR_TEMP
+
+    @property
+    def supported_features(self) -> LightEntityFeature:
+        return super().supported_features | LightEntityFeature.EFFECT
+
+    @property
+    def effect_list(self) -> list[str] | None:
+        return [
+            "christmas",
+            "colorCycle",
+            "festival",
+            "halloween",
+            "randomColor",
+            "rhythm",
+        ]
 
 
 class UnknownLight(Exception):
