@@ -1,4 +1,4 @@
-## HACS Sengled for Home Assistant
+# HACS Sengled for Home Assistant
 
 **This is incomplete alpha code.**
 
@@ -11,7 +11,7 @@ Tested with:
 
 ## Configuration
 
-Add your user name (email) and password in the `configuration.yaml`.
+Add a `sengledng` section to your `configuration.yaml` and set up your credentials.
 
 ```yaml
 sengledng:
