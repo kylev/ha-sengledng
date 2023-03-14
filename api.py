@@ -4,7 +4,7 @@ from http import HTTPStatus
 import json
 import logging
 import time
-from typing import Any, List
+from typing import Any
 from urllib import parse
 import uuid
 
@@ -18,13 +18,14 @@ _LOGGER = logging.getLogger(__name__)
 
 def _hassify_discovery(packet: dict[str, Any]) -> DiscoveryInfoType:
     result: DiscoveryInfoType = {}
-    for k, v in packet.items():
-        if isinstance(v, str):
-            result[k] = v
-        elif k in {"attributeList", "deviceAnimations"}:
-            pass
+    for key, value in packet.items():
+        if key in {"attributeList"}:
+            continue
+
+        if isinstance(value, str) or isinstance(value, list):
+            result[key] = value
         else:
-            _LOGGER.warning("Weird value while hassifying: %s", (k, v))
+            _LOGGER.warning("Weird value while hass-ifying: %s", (key, value))
 
     for item in packet["attributeList"]:
         result[item["name"]] = item["value"]
@@ -102,21 +103,25 @@ class API:
                 "MQTT connected with result code %s %s %s", userdata, flags, result_code
             )
             client.subscribe("$SYS/#")
-            # client.subscribe("wifielement/+/update")
-            # client.subscribe("wifielement/80:A0:36:E1:89:6F/update")
-            # client.subscribe("wifielement/#")
+            # client.subscribe("wifielement/#")  # Yikes
+            # Why don't these work? Special syntax for their server?
+            # client.subscribe("wifielement/+/status")
+            # client.subscribe("wifielement/+/consumption")
+            # client.subscribe("wifielement/+/consumptionTime")
+
+        def on_disconnect(client, userdata, result_code):
+            _LOGGER.warning("MQTT disconnected: %s", result_code)
+
+        def on_subscribe(client, userdata, mid, granted_qos):
+            _LOGGER.debug("MQTT subscribed MID:%s", mid)
 
         def on_message(_client, userdata, msg):
             if msg.topic.startswith("SYS"):
                 payload = json.loads(msg.payload)
-                _LOGGER.warning(
-                    "Unexpected MQTT system message(%s): %r", msg.topic, payload
-                )
-
-        def on_subscribe(client, userdata, mid, granted_qos):
-            _LOGGER.debug("MQTT subscribed %s %s", userdata, mid)
+                _LOGGER.warning("MQTT system message(%s): %r", msg.topic, payload)
 
         self._mqtt.on_connect = on_connect
+        self._mqtt.on_disconnect = on_disconnect
         self._mqtt.on_message = on_message
         self._mqtt.on_subscribe = on_subscribe
         self._mqtt.ws_set_options(
@@ -133,7 +138,7 @@ class API:
         self._mqtt.connect(self._inception_url.hostname, self._inception_url.port)
         self._mqtt.loop_start()
 
-    async def async_list_devices(self) -> List[DiscoveryInfoType]:
+    async def async_list_devices(self) -> list[DiscoveryInfoType]:
         """Get a list of HASS-friendly discovered devices."""
         url = "https://life2.cloud.sengled.com/life2/device/list.json"
         async with self._http.post(url) as resp:
@@ -146,6 +151,8 @@ class API:
             "wifielement/{}/#".format(light.unique_id), light.on_message
         )
         self._mqtt.subscribe("wifielement/{}/update".format(light.unique_id))
+        # self._mqtt.subscribe("wifielement/{}/consumption".format(light.unique_id))
+        # self._mqtt.subscribe("wifielement/{}/consumptionTime".format(light.unique_id))
 
     def send_message(self, device_id: str, message: Any):
         """Send a MQTT message to central control."""
