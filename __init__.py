@@ -33,7 +33,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Set up the platform API."""
     _LOGGER.info("Setup SengledNG package")
 
-    api = API(config[DOMAIN][CONF_USERNAME], config[DOMAIN][CONF_PASSWORD])
+    api = API(hass, config[DOMAIN][CONF_USERNAME], config[DOMAIN][CONF_PASSWORD])
     await api.async_setup()
 
     hass.data[DOMAIN] = api

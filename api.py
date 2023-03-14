@@ -1,5 +1,4 @@
 """API implmentation for SengledNG"""
-import aiohttp
 from http import HTTPStatus
 import json
 import logging
@@ -8,10 +7,22 @@ from typing import Any
 from urllib import parse
 import uuid
 
-from paho.mqtt import client as mqtt
+import aiohttp
 
+from homeassistant.components.mqtt.client import (
+    MQTT,
+    CONF_CLIENT_ID,
+    CONF_TRANSPORT,
+    CONF_KEEPALIVE,
+    TRANSPORT_WEBSOCKETS,
+    CONF_WS_PATH,
+    CONF_WS_HEADERS,
+    CONF_BROKER,
+    CONF_PORT,
+)
+import homeassistant.components.mqtt.util as mqtt_util
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.typing import DiscoveryInfoType
-
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -43,13 +54,15 @@ class API:
     _inception_url: parse.ParseResult | None = None
     _jbalancer_url: parse.ParseResult | None = None
     _jsession_id: str | None = None
+    _mqtt: MQTT | None = None
 
-    def __init__(self, username: str, password: str) -> None:
+    def __init__(self, hass: HomeAssistant, username: str, password: str) -> None:
+        self._hass = hass
         self._username = username
         self._password = password
         self._cookiejar = aiohttp.CookieJar()
         self._http = aiohttp.ClientSession(cookie_jar=self._cookiejar)
-        self._mqtt = mqtt.Client(transport="websockets")
+        # self._mqtt = mqtt.Client(transport="websockets")
 
     async def async_setup(self):
         """Perform setup."""
@@ -93,11 +106,6 @@ class API:
             self._inception_url,
         )
 
-        self._mqtt = mqtt.Client(
-            client_id="{}@lifeApp".format(self._jsession_id),
-            transport="websockets",
-        )
-
         def on_connect(client, userdata, flags, result_code):
             _LOGGER.info(
                 "MQTT connected with result code %s %s %s", userdata, flags, result_code
@@ -120,23 +128,32 @@ class API:
                 payload = json.loads(msg.payload)
                 _LOGGER.warning("MQTT system message(%s): %r", msg.topic, payload)
 
+        mqtt_util.get_mqtt_data(self._hass, True)
+        self._mqtt = MQTT(
+            self._hass,
+            None,
+            {
+                CONF_BROKER: self._inception_url.hostname,
+                CONF_CLIENT_ID: "{}@lifeApp".format(self._jsession_id),
+                CONF_KEEPALIVE: 60,
+                CONF_PORT: self._inception_url.port,
+                CONF_TRANSPORT: TRANSPORT_WEBSOCKETS,
+                CONF_WS_PATH: self._inception_url.path,
+                CONF_WS_HEADERS: {
+                    "Cookie": "JSESSIONID={}".format(self._jsession_id),
+                    "X-Requested-With": "com.sengled.life2",
+                },
+            },
+        )
+
+        # self._mqtt.client.set_tls_context()
+
         self._mqtt.on_connect = on_connect
         self._mqtt.on_disconnect = on_disconnect
         self._mqtt.on_message = on_message
         self._mqtt.on_subscribe = on_subscribe
-        self._mqtt.ws_set_options(
-            path=self._inception_url.path,
-            headers={
-                "Cookie": "JSESSIONID={}".format(self._jsession_id),
-                "X-Requested-With": "com.sengled.life2",
-            },
-        )
-        self._mqtt.tls_set_context()
-        self._mqtt.enable_logger()
 
-        # TODO Figure out how to use connect_async() without sometimes swallowing the first subscribe calls...
-        self._mqtt.connect(self._inception_url.hostname, self._inception_url.port)
-        self._mqtt.loop_start()
+        await self._mqtt.async_connect()
 
     async def async_list_devices(self) -> list[DiscoveryInfoType]:
         """Get a list of HASS-friendly discovered devices."""
@@ -145,21 +162,23 @@ class API:
             data = await resp.json()
             return [_hassify_discovery(d) for d in data["deviceList"]]
 
-    def subscribe_light(self, light):
+    async def async_subscribe_light(self, light):
         """Subscribe a light to its updates."""
-        self._mqtt.message_callback_add(
-            "wifielement/{}/#".format(light.unique_id), light.on_message
+        # TODO handle removal?
+        cancel = await self._mqtt.async_subscribe(
+            # "wifielement/{}/update".format(light.unique_id),
+            "wifielement/{}/#".format(light.unique_id),
+            # "wifielement/{}/consumption".format(light.unique_id),
+            # "wifielement/{}/consumptionTime".format(light.unique_id),
+            light.on_message,
+            0,
         )
-        self._mqtt.subscribe("wifielement/{}/update".format(light.unique_id))
-        # self._mqtt.subscribe("wifielement/{}/consumption".format(light.unique_id))
-        # self._mqtt.subscribe("wifielement/{}/consumptionTime".format(light.unique_id))
 
-    def send_message(self, device_id: str, message: Any):
+    async def async_send_message(self, device_id: str, message: Any):
         """Send a MQTT message to central control."""
         message.update({"dn": device_id, "time": int(time.time() * 1000)})
-        self._mqtt.publish(
-            "wifielement/{}/update".format(device_id),
-            json.dumps([message]),
+        await self._mqtt.async_publish(
+            "wifielement/{}/update".format(device_id), json.dumps([message]), 0, False
         )
 
     async def shutdown(self):
