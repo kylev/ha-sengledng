@@ -111,8 +111,6 @@ class BaseLight(LightEntity):
                     kwargs[ATTR_COLOR_TEMP], self.min_mireds, self.max_mireds
                 ),
             }
-        if ATTR_EFFECT in kwargs:
-            message = {"type": kwargs[ATTR_EFFECT], "value": "1"}
 
         if len(message) == 0:
             _LOGGER.warning("Empty action from turn_on command: %r", kwargs)
@@ -210,7 +208,23 @@ class ColorLight(BaseLight):
             "halloween",
             "randomColor",
             "rhythm",
+            "none",
         ]
+
+    def turn_on(self, **kwargs: Any) -> None:
+        effect = kwargs.pop(ATTR_EFFECT, None)
+        if not effect:
+            # self._attr_effect = None
+            return super().turn_on(**kwargs)
+
+        if effect == "none":
+            self._api.send_message(
+                self.unique_id, {"type": self._attr_effect, "value": "0"}
+            )
+            self._attr_effect = None
+        else:
+            self._api.send_message(self.unique_id, {"type": effect, "value": "1"})
+            self._attr_effect = effect
 
 
 class UnknownLight(Exception):
