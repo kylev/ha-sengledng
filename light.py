@@ -87,7 +87,7 @@ class BaseLight(LightEntity):
     def brightness(self) -> int | None:
         return math.ceil(int(self._light["brightness"]) / 100 * 255)
 
-    def turn_on(self, **kwargs: Any) -> None:
+    async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn on light."""
         _LOGGER.debug("Turn on %s %r", self.name, kwargs)
 
@@ -114,14 +114,16 @@ class BaseLight(LightEntity):
 
         if len(message) == 0:
             _LOGGER.warning("Empty action from turn_on command: %r", kwargs)
-        self._api.send_message(self.unique_id, message)
+        await self._api.async_send_message(self.unique_id, message)
 
-    def turn_off(self, **kwargs: Any) -> None:
+    async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn off light."""
         _LOGGER.debug("Turn off %s %r", self.name, kwargs)
-        self._api.send_message(self.unique_id, {"type": "switch", "value": "0"})
+        await self._api.async_send_message(
+            self.unique_id, {"type": "switch", "value": "0"}
+        )
 
-    def on_message(self, _mqtt_client, _userdata, msg):
+    def on_message(self, msg):
         """Handle a message from upstream."""
         payload = json.loads(msg.payload)
         _LOGGER.debug("On Message %r", payload)
@@ -137,6 +139,12 @@ class BaseLight(LightEntity):
 
         self._handle_packet(packet)
         self.schedule_update_ha_state()
+
+    # async def async_start(self, messages):
+    #     """Make it go?"""
+    #     await messages.subscribe("wifielement/{}/#".format(light.unique_id))
+    #     async for message in topic:
+    #         _LOGGER.debug("MQTT Light Message %s", message)
 
     def _handle_packet(self, packet):
         """Update state"""
@@ -242,7 +250,7 @@ def build_light(api: API, packet: DiscoveryInfoType) -> BaseLight:
             raise UnknownLight(str(packet))
 
 
-def setup_platform(
+async def async_setup_platform(
     hass: HomeAssistant,
     config: ConfigType,
     add_entities: AddEntitiesCallback,
@@ -252,6 +260,6 @@ def setup_platform(
     api = hass.data[DOMAIN]
 
     light = build_light(api, discovery_info)
-    api.subscribe_light(light)
+    await api.subscribe_light(light)
     _LOGGER.debug("Light built: %r", light)
     add_entities([light])
