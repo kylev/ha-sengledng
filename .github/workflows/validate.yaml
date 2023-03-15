@@ -10,6 +10,8 @@ on:
 jobs:
   validate-hacs:
     runs-on: "ubuntu-latest"
+    env:
+      INPUT_IGNORE: brand
     steps:
       - uses: "actions/checkout@v2"
       - name: HACS validation
