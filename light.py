@@ -140,12 +140,6 @@ class BaseLight(LightEntity):
         self._handle_packet(packet)
         self.schedule_update_ha_state()
 
-    # async def async_start(self, messages):
-    #     """Make it go?"""
-    #     await messages.subscribe("wifielement/{}/#".format(light.unique_id))
-    #     async for message in topic:
-    #         _LOGGER.debug("MQTT Light Message %s", message)
-
     def _handle_packet(self, packet):
         """Update state"""
         _LOGGER.debug("BaseLight %s handling packet %s", self.name, packet)
