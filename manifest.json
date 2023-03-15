@@ -5,9 +5,10 @@
   "dependencies": [],
   "documentation": "https://github.com/kylev/ha-sengledng",
   "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/kylev/ha-sengledng/issues",
   "loggers": ["paho_mqtt"],
   "requirements": [
     "paho-mqtt==1.6.1"
   ],
-  "version": "0.0.1"
+  "version": "0.2.0"
 }
