@@ -7,7 +7,7 @@
   "iot_class": "cloud_polling",
   "loggers": ["paho_mqtt"],
   "requirements": [
-    "paho-mqtt==1.6.1"
+    "asyncio-mqtt==0.16.1"
   ],
-  "version": "0.0.1"
+  "version": "0.2.0"
 }

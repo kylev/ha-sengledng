@@ -120,13 +120,15 @@ class API:
             async for message in messages:
                 if message.topic.matches("wifielement/+/status"):
                     self._lights[message.topic.value.split("/")[1]].on_message(message)
+                elif message.topic.matches("wifielement/+/update"):
+                    pass  # Ignore our own
                 else:
-                    _LOGGER.warning("Unexpected: %s %r", message.topic, message.payload)
+                    _LOGGER.info("Dropping: %s %r", message.topic, message.payload)
 
     async def subscribe_light(self, light):
         """Subscribe a light to its updates."""
         self._lights[light.unique_id] = light
-        await self._mqtt.subscribe("wifielement/{}/status".format(light.unique_id))
+        await self._mqtt.subscribe("wifielement/{}/#".format(light.unique_id))
         # await self._mqtt.subscribe("wifielement/{}/#".format(light.unique_id))
         # await self._mqtt.subscribe("wifielement/{}/update".format(light.unique_id))
         # await self._mqtt.subscribe("wifielement/{}/consumption".format(light.unique_id))
