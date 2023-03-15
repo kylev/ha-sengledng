@@ -42,11 +42,11 @@ class AuthError(Exception):
 class API:
     """API for Sengled"""
 
-    _mqtt: mqtt.Client | None = None
     _inception_url: parse.ParseResult | None = None
     _jbalancer_url: parse.ParseResult | None = None
     _jsession_id: str | None = None
     _lights = {}
+    _mqtt: mqtt.Client | None = None
 
     def __init__(self, hass: HomeAssistant, username: str, password: str) -> None:
         self._hass = hass
