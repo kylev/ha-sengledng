@@ -114,44 +114,22 @@ class BaseLight(LightEntity):
 
         if len(message) == 0:
             _LOGGER.warning("Empty action from turn_on command: %r", kwargs)
-        await self._api.async_send_message(self.unique_id, message)
+        await self._api.async_send_update(self.unique_id, message)
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn off light."""
         _LOGGER.debug("Turn off %s %r", self.name, kwargs)
-        await self._api.async_send_message(
+        await self._api.async_send_update(
             self.unique_id, {"type": "switch", "value": "0"}
         )
 
-    def on_message(self, msg):
-        """Handle a message from upstream."""
-        payload = json.loads(msg.payload)
-        _LOGGER.debug("On Message %r", payload)
-        if not isinstance(payload, list):
-            _LOGGER.warning("Strange message %r", payload)
-            return
-
-        packet = {}
-        for item in payload:
-            if len(item) == 0:
-                continue
-            packet[item["type"]] = item["value"]
-
-        self._handle_packet(packet)
-        self.schedule_update_ha_state()
-
-    def _handle_packet(self, packet):
+    def update_light(self, packet):
         """Update state"""
-        _LOGGER.debug("BaseLight %s handling packet %s", self.name, packet)
-        if len(packet) == 1:
-            if "switch" not in packet:
-                packet["switch"] = "1"
-            if "color" in packet:
-                packet["colorMode"] = "1"
-            if "colorTemperature" in packet:
-                packet["colorMode"] = "2"
-
+        _LOGGER.debug(
+            "%s %s handling packet %s", self.__class__.__name__, self.name, packet
+        )
         self._light.update(packet)
+        self.schedule_update_ha_state()
 
     def __repr__(self) -> str:
         return "<{} name={!r} brightness={!r} rgb={!r} mode={} supported_modes={!r} temp={!r}>".format(
