@@ -70,6 +70,11 @@ class BaseLight(LightEntity):
         return self._light["name"]
 
     @property
+    def mqtt_topic(self) -> str:
+        """The topic."""
+        return "wifielement/{}/status".format(self.unique_id)
+
+    @property
     def is_on(self) -> bool | None:
         return self._light["switch"] == "1"
 
@@ -243,6 +248,6 @@ async def async_setup_platform(
     api = hass.data[DOMAIN]
 
     light = build_light(api, discovery_info)
-    await api.subscribe_light(light)
+    await api.async_register_light(light)
     add_entities([light])
     _LOGGER.info("Discovered light %r", light)
