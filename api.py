@@ -123,18 +123,13 @@ class API:
                 elif message.topic.matches("wifielement/+/update"):
                     pass  # Ignore our own
                 else:
+                    # I've seen consumption and consumptionTime?
                     _LOGGER.info("Dropping: %s %r", message.topic, message.payload)
 
     async def subscribe_light(self, light):
         """Subscribe a light to its updates."""
         self._lights[light.unique_id] = light
         await self._mqtt.subscribe("wifielement/{}/#".format(light.unique_id))
-        # await self._mqtt.subscribe("wifielement/{}/#".format(light.unique_id))
-        # await self._mqtt.subscribe("wifielement/{}/update".format(light.unique_id))
-        # await self._mqtt.subscribe("wifielement/{}/consumption".format(light.unique_id))
-        # await self._mqtt.subscribe(
-        #     "wifielement/{}/consumptionTime".format(light.unique_id)
-        # )
 
     async def async_send_message(self, device_id: str, message: Any):
         """Send a MQTT message to central control."""
