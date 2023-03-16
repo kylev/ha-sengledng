@@ -211,17 +211,19 @@ class ColorLight(BaseLight):
             "none",
         ]
 
-    def turn_on(self, **kwargs: Any) -> None:
+    async def async_turn_on(self, **kwargs: Any) -> None:
         effect = kwargs.pop(ATTR_EFFECT, None)
         if not effect:
-            return super().turn_on(**kwargs)
+            return await super().async_turn_on(**kwargs)
 
         if effect == "none":
-            self._api.send_message(
+            await self._api.async_send_update(
                 self.unique_id, {"type": "effectStatus", "value": "0"}
             )
         else:
-            self._api.send_message(self.unique_id, {"type": effect, "value": "1"})
+            await self._api.async_send_update(
+                self.unique_id, {"type": effect, "value": "1"}
+            )
 
 
 class UnknownLight(Exception):
