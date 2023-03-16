@@ -33,11 +33,15 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Set up the platform API."""
     _LOGGER.info("Setup SengledNG package")
 
-    api = API(config[DOMAIN][CONF_USERNAME], config[DOMAIN][CONF_PASSWORD])
+    api = API(hass, config[DOMAIN][CONF_USERNAME], config[DOMAIN][CONF_PASSWORD])
     await api.async_setup()
 
     hass.data[DOMAIN] = api
     for device in await api.async_list_devices():
         hass.helpers.discovery.load_platform(Platform.LIGHT, DOMAIN, device, config)
+
+    hass.async_create_background_task(
+        api.async_start(), "sengledng.api.API message loop"
+    )
 
     return True
