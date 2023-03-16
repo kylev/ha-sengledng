@@ -48,13 +48,15 @@ class API:
     _inception_url: parse.ParseResult | None = None
     _jbalancer_url: parse.ParseResult | None = None
     _jsession_id: str | None = None
-    _lights = {}
     _mqtt: mqtt.Client | None = None
 
     def __init__(self, hass: HomeAssistant, username: str, password: str) -> None:
         self._hass = hass
         self._username = username
         self._password = password
+
+        self._lights = {}
+        self._lights_mutex = asyncio.Lock()
         self._cookiejar = aiohttp.CookieJar()
         self._http = aiohttp.ClientSession(cookie_jar=self._cookiejar)
 
@@ -104,7 +106,10 @@ class API:
 
         await client.connect()
         self._mqtt = client
-        for light in self._lights.values():
+
+        async with self._lights_mutex:
+            lights = list(self._lights.values())
+        for light in lights:
             await self._subscribe_light(light)
 
     async def _async_discover_lights(self) -> list[DiscoveryInfoType]:
@@ -143,7 +148,8 @@ class API:
 
     async def async_register_light(self, light):
         """Subscribe a light to its updates."""
-        self._lights[light.unique_id] = light
+        async with self._lights_mutex:
+            self._lights[light.unique_id] = light
         await self._subscribe_light(light)
 
     async def _subscribe_light(self, light):
