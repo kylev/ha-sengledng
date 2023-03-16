@@ -1,19 +1,21 @@
 """API implmentation for SengledNG"""
-import aiohttp
 from http import HTTPStatus
 import json
 import logging
+import ssl
 import time
 from typing import Any
 from urllib import parse
 import uuid
 
+import aiohttp
 import asyncio_mqtt as mqtt
-import ssl
 
+from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.typing import DiscoveryInfoType
 
+from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -116,6 +118,13 @@ class API:
 
     async def async_start(self):
         """Start the API's main event loop."""
+        await self.async_setup()
+
+        for device in await self.async_list_devices():
+            self._hass.helpers.discovery.load_platform(
+                Platform.LIGHT, DOMAIN, device, {}
+            )
+
         async with self._mqtt.messages() as messages:
             async for message in messages:
                 if message.topic.matches("wifielement/+/status"):
