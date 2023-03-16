@@ -108,7 +108,7 @@ class API:
         self._mqtt = client
 
         async with self._lights_mutex:
-            lights = list(self._lights.values())
+            lights = tuple(self._lights.values())
         for light in lights:
             await self._subscribe_light(light)
 
@@ -154,7 +154,8 @@ class API:
 
     async def _subscribe_light(self, light):
         if self._mqtt:
-            await self._mqtt.subscribe(light.mqtt_topic)
+            for topic in light.mqtt_topics:
+                await self._mqtt.subscribe(topic)
 
     async def async_send_update(self, device_id: str, message: Any):
         """Send a MQTT update to central control."""
