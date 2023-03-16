@@ -128,8 +128,8 @@ class API:
 
     async def subscribe_light(self, light):
         """Subscribe a light to its updates."""
-        self._lights[light.unique_id] = light
         await self._mqtt.subscribe("wifielement/{}/#".format(light.unique_id))
+        self._lights[light.unique_id] = light
 
     async def async_send_message(self, device_id: str, message: Any):
         """Send a MQTT message to central control."""
