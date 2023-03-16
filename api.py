@@ -1,19 +1,21 @@
 """API implmentation for SengledNG"""
-import aiohttp
 from http import HTTPStatus
 import json
 import logging
+import ssl
 import time
 from typing import Any
 from urllib import parse
 import uuid
 
+import aiohttp
 import asyncio_mqtt as mqtt
-import ssl
 
+from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.typing import DiscoveryInfoType
 
+from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -116,28 +118,53 @@ class API:
 
     async def async_start(self):
         """Start the API's main event loop."""
+        await self.async_setup()
+
+        for device in await self.async_list_devices():
+            self._hass.helpers.discovery.load_platform(
+                Platform.LIGHT, DOMAIN, device, {}
+            )
+
         async with self._mqtt.messages() as messages:
             async for message in messages:
                 if message.topic.matches("wifielement/+/status"):
-                    self._lights[message.topic.value.split("/")[1]].on_message(message)
-                elif message.topic.matches("wifielement/+/update"):
-                    pass  # Ignore our own
+                    self._handle_status(message)
                 else:
-                    # I've seen consumption and consumptionTime?
-                    _LOGGER.info("Dropping: %s %r", message.topic, message.payload)
+                    _LOGGER.warning("Dropping: %s %r", message.topic, message.payload)
 
     async def subscribe_light(self, light):
         """Subscribe a light to its updates."""
-        await self._mqtt.subscribe("wifielement/{}/#".format(light.unique_id))
+        # I've seen consumption and consumptionTime?
+        await self._mqtt.subscribe("wifielement/{}/status".format(light.unique_id))
         self._lights[light.unique_id] = light
 
-    async def async_send_message(self, device_id: str, message: Any):
-        """Send a MQTT message to central control."""
+    async def async_send_update(self, device_id: str, message: Any):
+        """Send a MQTT update to central control."""
         message.update({"dn": device_id, "time": int(time.time() * 1000)})
         await self._mqtt.publish(
             "wifielement/{}/update".format(device_id),
             payload=json.dumps([message]),
         )
+
+    def _handle_status(self, msg):
+        """Handle a message from upstream."""
+        light_id = msg.topic.value.split("/")[1]
+        light = self._lights.get(light_id, None)
+        if not light:
+            _LOGGER.warning("Status for unknown light %s", light_id)
+            return
+
+        payload = json.loads(msg.payload)
+        if not isinstance(payload, list):
+            _LOGGER.warning("Strange message %r", payload)
+            return
+
+        packet = {}
+        for item in payload:
+            if len(item) == 0:
+                continue
+            packet[item["type"]] = item["value"]
+        light.update_light(packet)
 
     async def shutdown(self):
         """Shutdown and tidy up."""

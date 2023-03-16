@@ -114,51 +114,31 @@ class BaseLight(LightEntity):
 
         if len(message) == 0:
             _LOGGER.warning("Empty action from turn_on command: %r", kwargs)
-        await self._api.async_send_message(self.unique_id, message)
+        await self._api.async_send_update(self.unique_id, message)
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn off light."""
         _LOGGER.debug("Turn off %s %r", self.name, kwargs)
-        await self._api.async_send_message(
+        await self._api.async_send_update(
             self.unique_id, {"type": "switch", "value": "0"}
         )
 
-    def on_message(self, msg):
-        """Handle a message from upstream."""
-        payload = json.loads(msg.payload)
-        _LOGGER.debug("On Message %r", payload)
-        if not isinstance(payload, list):
-            _LOGGER.warning("Strange message %r", payload)
-            return
-
-        packet = {}
-        for item in payload:
-            if len(item) == 0:
-                continue
-            packet[item["type"]] = item["value"]
-
-        self._handle_packet(packet)
+    def update_light(self, packet):
+        """Update state"""
+        _LOGGER.debug(
+            "%s %s handling packet %s", self.__class__.__name__, self.name, packet
+        )
+        self._light.update(packet)
         self.schedule_update_ha_state()
 
-    def _handle_packet(self, packet):
-        """Update state"""
-        _LOGGER.debug("BaseLight %s handling packet %s", self.name, packet)
-        if len(packet) == 1:
-            if "switch" not in packet:
-                packet["switch"] = "1"
-            if "color" in packet:
-                packet["colorMode"] = "1"
-            if "colorTemperature" in packet:
-                packet["colorMode"] = "2"
-
-        self._light.update(packet)
-
     def __repr__(self) -> str:
-        return "<BaseLight name={!r} mode={!r} modes={!r} rgb={!r} temp={!r}>".format(
+        return "<{} name={!r} brightness={!r} rgb={!r} mode={} supported_modes={!r} temp={!r}>".format(
+            self.__class__.__name__,
             self.name,
+            self.brightness,
+            self.rgb_color,
             self.color_mode,
             self.supported_color_modes,
-            self.rgb_color,
             self.color_temp,
         )
 
@@ -175,7 +155,8 @@ class ColorLight(BaseLight):
     """A Sengled wifi color light."""
 
     # Figure out these ranges per light?
-    # _attr_max_mireds = 370  # 1,000,000 divided by 2700 Kelvin = 370 Mireds
+    # 1,000,000 divided by 2700 Kelvin = 370 Mireds
+    _attr_max_mireds = 400
     # _attr_min_mireds = 154  # 1,000,000 divided by 6500 Kelvin = 154 Mireds
 
     @property
@@ -192,14 +173,26 @@ class ColorLight(BaseLight):
 
     @property
     def color_mode(self) -> ColorMode | str | None:
-        if self._light["colorMode"] == "1":
-            return ColorMode.RGB
-        if self._light["colorMode"] == "2":
-            return ColorMode.COLOR_TEMP
+        match self._light["colorMode"]:
+            case "1":
+                return ColorMode.RGB
+            case "2":
+                return ColorMode.COLOR_TEMP
 
     @property
     def supported_features(self) -> LightEntityFeature:
         return super().supported_features | LightEntityFeature.EFFECT
+
+    @property
+    def effect(self) -> str | None:
+        return {
+            "1": "colorCycle",
+            "2": "randomColor",
+            "3": "rhythm",
+            "4": "christmas",
+            "5": "halloween",
+            "6": "festival",
+        }.get(self._light["effectStatus"], None)
 
     @property
     def effect_list(self) -> list[str] | None:
@@ -216,17 +209,14 @@ class ColorLight(BaseLight):
     def turn_on(self, **kwargs: Any) -> None:
         effect = kwargs.pop(ATTR_EFFECT, None)
         if not effect:
-            # self._attr_effect = None
             return super().turn_on(**kwargs)
 
         if effect == "none":
             self._api.send_message(
-                self.unique_id, {"type": self._attr_effect, "value": "0"}
+                self.unique_id, {"type": "effectStatus", "value": "0"}
             )
-            self._attr_effect = None
         else:
             self._api.send_message(self.unique_id, {"type": effect, "value": "1"})
-            self._attr_effect = effect
 
 
 class UnknownLight(Exception):
@@ -235,13 +225,12 @@ class UnknownLight(Exception):
 
 def build_light(api: API, packet: DiscoveryInfoType) -> BaseLight:
     """Factory for bulbs."""
-    match packet["typeCode"]:
-        case "W21-N13":
-            return ColorLight(api, packet)
-        case "W21-N11":
-            return WhiteLight(api, packet)
-        case _:
-            raise UnknownLight(str(packet))
+    if "colorMode" in packet:
+        return ColorLight(api, packet)
+    if "brightness" in packet:
+        return WhiteLight(api, packet)
+
+    _LOGGER.warning("Couldn't build light for packet %s", packet)
 
 
 async def async_setup_platform(
@@ -255,5 +244,5 @@ async def async_setup_platform(
 
     light = build_light(api, discovery_info)
     await api.subscribe_light(light)
-    _LOGGER.debug("Light built: %r", light)
     add_entities([light])
+    _LOGGER.info("Discovered light %r", light)
