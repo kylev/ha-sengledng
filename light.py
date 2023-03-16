@@ -155,7 +155,8 @@ class ColorLight(BaseLight):
     """A Sengled wifi color light."""
 
     # Figure out these ranges per light?
-    # _attr_max_mireds = 370  # 1,000,000 divided by 2700 Kelvin = 370 Mireds
+    # 1,000,000 divided by 2700 Kelvin = 370 Mireds
+    _attr_max_mireds = 400
     # _attr_min_mireds = 154  # 1,000,000 divided by 6500 Kelvin = 154 Mireds
 
     @property
