@@ -1,4 +1,5 @@
 """API implmentation for SengledNG"""
+import asyncio
 from http import HTTPStatus
 import json
 import logging
@@ -57,12 +58,6 @@ class API:
         self._cookiejar = aiohttp.CookieJar()
         self._http = aiohttp.ClientSession(cookie_jar=self._cookiejar)
 
-    async def async_setup(self):
-        """Perform setup."""
-        await self._async_login()
-        await self._async_get_server_info()
-        await self._async_setup_mqtt()
-
     async def _async_login(self):
         url = "https://ucenter.cloud.sengled.com/user/app/customer/v2/AuthenCross.json"
         # For Zigbee? login_path = "/zigbee/customer/login.json"
@@ -94,7 +89,7 @@ class API:
 
     async def _async_setup_mqtt(self):
         """Setup up MQTT client."""
-        self._mqtt = mqtt.Client(
+        client = mqtt.Client(
             self._inception_url.hostname,
             self._inception_url.port,
             client_id="{}@lifeApp".format(self._jsession_id),
@@ -107,36 +102,53 @@ class API:
             websocket_path=self._inception_url.path,
         )
 
-        await self._mqtt.connect()
+        await client.connect()
+        self._mqtt = client
+        for light in self._lights.values():
+            await self._subscribe_light(light)
 
-    async def async_list_devices(self) -> list[DiscoveryInfoType]:
+    async def _async_discover_lights(self) -> list[DiscoveryInfoType]:
         """Get a list of HASS-friendly discovered devices."""
         url = "https://life2.cloud.sengled.com/life2/device/list.json"
         async with self._http.post(url) as resp:
             data = await resp.json()
-            return [_hassify_discovery(d) for d in data["deviceList"]]
+            for device in [_hassify_discovery(d) for d in data["deviceList"]]:
+                self._hass.helpers.discovery.load_platform(
+                    Platform.LIGHT, DOMAIN, device, {}
+                )
 
     async def async_start(self):
         """Start the API's main event loop."""
-        await self.async_setup()
+        await self._async_login()
+        await self._async_get_server_info()
+        await self._async_discover_lights()
 
-        for device in await self.async_list_devices():
-            self._hass.helpers.discovery.load_platform(
-                Platform.LIGHT, DOMAIN, device, {}
-            )
+        while True:
+            try:
+                await self._async_setup_mqtt()
+                await self._message_loop()
+            except mqtt.MqttError as error:
+                _LOGGER.warning("Messaging stalled %r", error)
+                await asyncio.sleep(10)
 
+    async def _message_loop(self):
         async with self._mqtt.messages() as messages:
             async for message in messages:
                 if message.topic.matches("wifielement/+/status"):
                     self._handle_status(message)
+                elif message.topic.matches("wifielement/+/update"):
+                    pass
                 else:
                     _LOGGER.warning("Dropping: %s %r", message.topic, message.payload)
 
-    async def subscribe_light(self, light):
+    async def async_register_light(self, light):
         """Subscribe a light to its updates."""
-        # I've seen consumption and consumptionTime?
-        await self._mqtt.subscribe("wifielement/{}/status".format(light.unique_id))
         self._lights[light.unique_id] = light
+        await self._subscribe_light(light)
+
+    async def _subscribe_light(self, light):
+        if self._mqtt:
+            await self._mqtt.subscribe(light.mqtt_topic)
 
     async def async_send_update(self, device_id: str, message: Any):
         """Send a MQTT update to central control."""
