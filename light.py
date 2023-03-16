@@ -1,7 +1,6 @@
 """SengledNG light platform."""
 from __future__ import annotations
 
-import json
 import logging
 import math
 from typing import Any
@@ -22,7 +21,17 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 
 from .api import API
-from .const import ATTRIBUTION, DOMAIN
+from .const import (
+    ATTRIBUTION,
+    DOMAIN,
+    PACKET_BRIGHTNESS,
+    PACKET_COLOR_MODE,
+    PACKET_COLOR_TEMP,
+    PACKET_EFFECT,
+    PACKET_ONLINE,
+    PACKET_RGB_COLOR,
+    PACKET_SWITCH,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -31,7 +40,6 @@ COLOR_TRANSLATIONS = {
     "color": ColorMode.RGB,
     "colorTemperature": ColorMode.COLOR_TEMP,
 }
-COLOR_SOLO_UPDATES = {"brightness", "color"}
 
 
 def decode_color_temp(value_pct: str, min_mireds: int, max_mireds: int) -> int:
@@ -70,17 +78,20 @@ class BaseLight(LightEntity):
         return self._light["name"]
 
     @property
-    def mqtt_topic(self) -> str:
+    def mqtt_topics(self) -> tuple[str]:
         """The topic."""
-        return "wifielement/{}/status".format(self.unique_id)
+        return (
+            "wifielement/{}/status".format(self.unique_id),
+            # "wifielement/{}/consumptionTime".format(self.unique_id),
+        )
 
     @property
     def is_on(self) -> bool | None:
-        return self._light["switch"] == "1"
+        return self._light[PACKET_SWITCH] == "1"
 
     @property
     def available(self) -> bool:
-        return self._light["online"] == "1"
+        return self._light[PACKET_ONLINE] == "1"
 
     @property
     def supported_color_modes(self) -> set[ColorMode] | set[str] | None:
@@ -90,7 +101,7 @@ class BaseLight(LightEntity):
 
     @property
     def brightness(self) -> int | None:
-        return math.ceil(int(self._light["brightness"]) / 100 * 255)
+        return math.ceil(int(self._light[PACKET_BRIGHTNESS]) / 100 * 255)
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn on light."""
@@ -98,20 +109,20 @@ class BaseLight(LightEntity):
 
         message = {}
         if len(kwargs) == 0:
-            message = {"type": "switch", "value": "1"}
+            message = {"type": PACKET_SWITCH, "value": "1"}
         if ATTR_BRIGHTNESS in kwargs:
             message = {
-                "type": "brightness",
+                "type": PACKET_BRIGHTNESS,
                 "value": str(math.ceil(kwargs[ATTR_BRIGHTNESS] / 255 * 100)),
             }
         if ATTR_RGB_COLOR in kwargs:
             message = {
-                "type": "color",
+                "type": PACKET_RGB_COLOR,
                 "value": ":".join([str(v) for v in kwargs[ATTR_RGB_COLOR]]),
             }
         if ATTR_COLOR_TEMP in kwargs:
             message = {
-                "type": "colorTemperature",
+                "type": PACKET_COLOR_TEMP,
                 "value": encode_color_temp(
                     kwargs[ATTR_COLOR_TEMP], self.min_mireds, self.max_mireds
                 ),
@@ -125,14 +136,12 @@ class BaseLight(LightEntity):
         """Turn off light."""
         _LOGGER.debug("Turn off %s %r", self.name, kwargs)
         await self._api.async_send_update(
-            self.unique_id, {"type": "switch", "value": "0"}
+            self.unique_id, {"type": PACKET_SWITCH, "value": "0"}
         )
 
     def update_light(self, packet):
         """Update state"""
-        _LOGGER.debug(
-            "%s %s handling packet %s", self.__class__.__name__, self.name, packet
-        )
+        _LOGGER.debug("Packet %s %s", packet, self)
         self._light.update(packet)
         self.schedule_update_ha_state()
 
@@ -166,19 +175,19 @@ class ColorLight(BaseLight):
 
     @property
     def rgb_color(self) -> tuple[int, int, int] | None:
-        return [int(rgbv) for rgbv in self._light["color"].split(":")]
+        return tuple(int(rgb) for rgb in self._light[PACKET_RGB_COLOR].split(":"))
 
     @property
     def color_temp(self) -> int | None:
         return decode_color_temp(
-            self._light["colorTemperature"],
+            self._light[PACKET_COLOR_TEMP],
             self.min_mireds,
             self.max_mireds,
         )
 
     @property
     def color_mode(self) -> ColorMode | str | None:
-        match self._light["colorMode"]:
+        match self._light[PACKET_COLOR_MODE]:
             case "1":
                 return ColorMode.RGB
             case "2":
@@ -197,7 +206,7 @@ class ColorLight(BaseLight):
             "4": "christmas",
             "5": "halloween",
             "6": "festival",
-        }.get(self._light["effectStatus"], None)
+        }.get(self._light[PACKET_EFFECT], None)
 
     @property
     def effect_list(self) -> list[str] | None:
@@ -213,17 +222,16 @@ class ColorLight(BaseLight):
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         effect = kwargs.pop(ATTR_EFFECT, None)
-        if not effect:
-            return await super().async_turn_on(**kwargs)
-
-        if effect == "none":
-            await self._api.async_send_update(
-                self.unique_id, {"type": "effectStatus", "value": "0"}
-            )
-        else:
-            await self._api.async_send_update(
-                self.unique_id, {"type": effect, "value": "1"}
-            )
+        if effect:
+            if effect == "none":
+                await self._api.async_send_update(
+                    self.unique_id, {"type": self.effect, "value": "0"}
+                )
+            else:
+                await self._api.async_send_update(
+                    self.unique_id, {"type": effect, "value": "1"}
+                )
+        await super().async_turn_on(**kwargs)
 
 
 class UnknownLight(Exception):
@@ -232,9 +240,9 @@ class UnknownLight(Exception):
 
 def build_light(api: API, packet: DiscoveryInfoType) -> BaseLight:
     """Factory for bulbs."""
-    if "colorMode" in packet:
+    if PACKET_RGB_COLOR in packet:
         return ColorLight(api, packet)
-    if "brightness" in packet:
+    if PACKET_BRIGHTNESS in packet:
         return WhiteLight(api, packet)
 
     _LOGGER.warning("Couldn't build light for packet %s", packet)
