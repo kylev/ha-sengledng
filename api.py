@@ -157,13 +157,15 @@ class API:
             for topic in light.mqtt_topics:
                 await self._mqtt.subscribe(topic)
 
-    async def async_send_update(self, device_id: str, message: Any):
+    async def async_send_updates(self, device_id: str, *messages: list[dict[str, str]]):
         """Send a MQTT update to central control."""
-        message.update({"dn": device_id, "time": int(time.time() * 1000)})
+        extras = {"dn": device_id, "time": int(time.time() * 1000)}
+
         await self._mqtt.publish(
             "wifielement/{}/update".format(device_id),
-            payload=json.dumps([message]),
+            payload=json.dumps([message | extras for message in messages]),
         )
+        _LOGGER.debug("MQTT publish %r", messages)
 
     def _handle_status(self, msg):
         """Handle a message from upstream."""
