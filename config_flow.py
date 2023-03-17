@@ -22,5 +22,5 @@ class SengledNGConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_zeroconf(
         self, discovery_info: ZeroconfServiceInfo
     ) -> FlowResult:
-        _LOGGER.info("async_step_zeroconf %r", discovery_info)
+        _LOGGER.debug("async_step_zeroconf %r", discovery_info)
         return self.async_abort(reason="Not implemented")
