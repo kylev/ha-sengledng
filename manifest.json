@@ -4,8 +4,9 @@
   "codeowners": ["@kylev"],
   "dependencies": [],
   "documentation": "https://github.com/kylev/ha-sengledng",
+  "integration_type": "hub",
   "iot_class": "cloud_polling",
-  "loggers": ["paho_mqtt"],
+  "loggers": ["mqtt"],
   "requirements": [
     "asyncio-mqtt==0.16.1"
   ],
