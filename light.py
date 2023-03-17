@@ -80,12 +80,12 @@ class BaseLight(LightEntity):
         return self._light["name"]
 
     @property
-    def mqtt_topics(self) -> tuple[str]:
+    def mqtt_topics(self) -> list[str]:
         """The topic."""
         # Wish I could do "wifielement/{}/consumptionTime"
-        return tuple(
+        return [
             "wifielement/{}/status".format(self.unique_id),
-        )
+        ]
 
     @property
     def is_on(self) -> bool | None:
