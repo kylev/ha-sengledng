@@ -31,6 +31,8 @@ from .const import (
     PACKET_ONLINE,
     PACKET_RGB_COLOR,
     PACKET_SWITCH,
+    PACKET_VALUE_OFF,
+    PACKET_VALUE_ON,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -78,20 +80,20 @@ class BaseLight(LightEntity):
         return self._light["name"]
 
     @property
-    def mqtt_topics(self) -> tuple[str]:
+    def mqtt_topics(self) -> list[str]:
         """The topic."""
-        return (
+        # Wish I could do "wifielement/{}/consumptionTime"
+        return [
             "wifielement/{}/status".format(self.unique_id),
-            # "wifielement/{}/consumptionTime".format(self.unique_id),
-        )
+        ]
 
     @property
     def is_on(self) -> bool | None:
-        return self._light[PACKET_SWITCH] == "1"
+        return self._light[PACKET_SWITCH] == PACKET_VALUE_ON
 
     @property
     def available(self) -> bool:
-        return self._light[PACKET_ONLINE] == "1"
+        return self._light[PACKET_ONLINE] == PACKET_VALUE_ON
 
     @property
     def supported_color_modes(self) -> set[ColorMode] | set[str] | None:
@@ -107,43 +109,55 @@ class BaseLight(LightEntity):
         """Turn on light."""
         _LOGGER.debug("Turn on %s %r", self.name, kwargs)
 
-        message = {}
         if len(kwargs) == 0:
-            message = {"type": PACKET_SWITCH, "value": "1"}
-        if ATTR_BRIGHTNESS in kwargs:
-            message = {
-                "type": PACKET_BRIGHTNESS,
-                "value": str(math.ceil(kwargs[ATTR_BRIGHTNESS] / 255 * 100)),
-            }
-        if ATTR_RGB_COLOR in kwargs:
-            message = {
-                "type": PACKET_RGB_COLOR,
-                "value": ":".join([str(v) for v in kwargs[ATTR_RGB_COLOR]]),
-            }
-        if ATTR_COLOR_TEMP in kwargs:
-            message = {
-                "type": PACKET_COLOR_TEMP,
-                "value": encode_color_temp(
-                    kwargs[ATTR_COLOR_TEMP], self.min_mireds, self.max_mireds
-                ),
-            }
+            await self._async_send_update(PACKET_SWITCH, PACKET_VALUE_ON)
+            return
 
-        if len(message) == 0:
+        messages = []
+        if ATTR_BRIGHTNESS in kwargs:
+            messages.append(
+                {
+                    "type": PACKET_BRIGHTNESS,
+                    "value": str(math.ceil(kwargs[ATTR_BRIGHTNESS] / 255 * 100)),
+                }
+            )
+        if ATTR_RGB_COLOR in kwargs:
+            messages.append(
+                {
+                    "type": PACKET_RGB_COLOR,
+                    "value": ":".join([str(v) for v in kwargs[ATTR_RGB_COLOR]]),
+                }
+            )
+        if ATTR_COLOR_TEMP in kwargs:
+            messages.append(
+                {
+                    "type": PACKET_COLOR_TEMP,
+                    "value": encode_color_temp(
+                        kwargs[ATTR_COLOR_TEMP], self.min_mireds, self.max_mireds
+                    ),
+                }
+            )
+
+        if len(messages) == 0:
             _LOGGER.warning("Empty action from turn_on command: %r", kwargs)
-        await self._api.async_send_update(self.unique_id, message)
+        else:
+            await self._api.async_send_updates(self.unique_id, *messages)
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn off light."""
         _LOGGER.debug("Turn off %s %r", self.name, kwargs)
-        await self._api.async_send_update(
-            self.unique_id, {"type": PACKET_SWITCH, "value": "0"}
-        )
+        await self._async_send_update(PACKET_SWITCH, PACKET_VALUE_OFF)
 
     def update_light(self, packet):
         """Update state"""
         _LOGGER.debug("Packet %s %s", packet, self)
         self._light.update(packet)
         self.schedule_update_ha_state()
+
+    async def _async_send_update(self, update_type: str, value: str):
+        await self._api.async_send_updates(
+            self.unique_id, {"type": update_type, "value": value}
+        )
 
     def __repr__(self) -> str:
         return "<{} name={!r} brightness={!r} rgb={!r} mode={} supported_modes={!r} temp={!r}>".format(
@@ -223,14 +237,11 @@ class ColorLight(BaseLight):
     async def async_turn_on(self, **kwargs: Any) -> None:
         effect = kwargs.pop(ATTR_EFFECT, None)
         if effect:
+            value = PACKET_VALUE_ON
             if effect == "none":
-                await self._api.async_send_update(
-                    self.unique_id, {"type": self.effect, "value": "0"}
-                )
-            else:
-                await self._api.async_send_update(
-                    self.unique_id, {"type": effect, "value": "1"}
-                )
+                effect = self.effect
+                value = PACKET_VALUE_OFF
+            await self._async_send_update(effect, value)
         await super().async_turn_on(**kwargs)
 
 
