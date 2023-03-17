@@ -132,7 +132,7 @@ class API:
             try:
                 await self._async_setup_mqtt()
                 await self._message_loop()
-            except mqtt.MqttConnectError as conerr:
+            except mqtt.error.MqttConnectError as conerr:
                 _LOGGER.info("Re-authenticating after %r", conerr)
                 await self._async_login()
             except mqtt.MqttError as error:
