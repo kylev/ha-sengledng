@@ -16,7 +16,7 @@ from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.typing import DiscoveryInfoType
 
-from .const import DOMAIN
+from ..const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
