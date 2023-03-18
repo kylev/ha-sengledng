@@ -1,17 +1,24 @@
-"""Internal, HASS-less interface."""
+"""API implmentation for SengledNG"""
+import asyncio
+from http import HTTPStatus
+import json
 import logging
+import ssl
+import time
+from typing import Any
+from urllib import parse
+import uuid
+
+import aiohttp
+import asyncio_mqtt as mqtt
 
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.typing import DiscoveryInfoType
 
-from .api import API
-from .light import create_light, encode_color_temp
 from ..const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
-
-__all__ = ["API", "create_light", "encode_color_temp"]
 
 
 def _hassify_discovery(packet: dict[str, Any]) -> DiscoveryInfoType:
@@ -52,10 +59,6 @@ class API:
         self._lights_mutex = asyncio.Lock()
         self._cookiejar = aiohttp.CookieJar()
         self._http = aiohttp.ClientSession(cookie_jar=self._cookiejar)
-
-    async def check_auth(username, password):
-        """See if it'll work."""
-        await API(None, username, password)._async_login()
 
     async def _async_login(self):
         url = "https://ucenter.cloud.sengled.com/user/app/customer/v2/AuthenCross.json"

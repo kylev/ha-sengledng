@@ -20,20 +20,17 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 
-from .api import API
-from .api.light import create_light
+from .api import API, create_light, encode_color_temp
 from .const import (
     ATTRIBUTION,
     DOMAIN,
     PACKET_BRIGHTNESS,
-    PACKET_COLOR_MODE,
-    PACKET_COLOR_TEMP,
-    PACKET_EFFECT,
-    PACKET_ONLINE,
     PACKET_RGB_COLOR,
-    PACKET_SWITCH,
-    PACKET_VALUE_OFF,
+    PACKET_EFFECT,
     PACKET_VALUE_ON,
+    PACKET_VALUE_OFF,
+    PACKET_SWITCH,
+    PACKET_COLOR_TEMP,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -45,20 +42,7 @@ COLOR_TRANSLATIONS = {
 }
 
 
-def decode_color_temp(value_pct: str, min_mireds: int, max_mireds: int) -> int:
-    """Convert Sengled's brightness percentage to mireds given the light's range."""
-    # return 370
-    return math.ceil(
-        max_mireds - ((int(value_pct) / 100.0) * (max_mireds - min_mireds))
-    )
-
-
-def encode_color_temp(value_mireds: int, min_mireds: int, max_mireds: int) -> str:
-    """Convert brightness from HA to Sengled."""
-    return str(math.ceil((max_mireds - value_mireds) / (max_mireds - min_mireds) * 100))
-
-
-class BaseLight(LightEntity):
+class Light(LightEntity):
     """Base Light"""
 
     _light: DiscoveryInfoType = {}
@@ -69,42 +53,39 @@ class BaseLight(LightEntity):
         _LOGGER.debug("BaseLight init %r", info)
         self._api = api
         self._light = create_light(info)
-        self._device_id = info["deviceUuid"]
-        self._attr_unique_id = info["deviceUuid"]
 
-        self._attr_device_info = DeviceInfo(
-            manufacturer="Sengled", model=info["typeCode"], sw_version=info["version"]
-        )
+    unique_id = property(lambda s: s._light.unique_id)
+    name = property(lambda s: s._light.name)
+    mqtt_topics = property(lambda s: s._light.mqtt_topics)
 
-    @property
-    def name(self) -> str | None:
-        return self._light["name"]
-
-    @property
-    def mqtt_topics(self) -> list[str]:
-        """The topic."""
-        # Wish I could do "wifielement/{}/consumptionTime"
-        return [
-            "wifielement/{}/status".format(self.unique_id),
-        ]
-
-    @property
-    def is_on(self) -> bool | None:
-        return self._light[PACKET_SWITCH] == PACKET_VALUE_ON
-
-    @property
-    def available(self) -> bool:
-        return self._light.available
+    available = property(lambda s: s._light.available)
+    brightness = property(lambda s: s._light.brightness)
+    color_mode = property(lambda s: s._light.color_mode)
+    color_temp = property(lambda s: s._light.color_temp)
+    effect_list = property(lambda s: s._light.effect_list)
+    is_on = property(lambda s: s._light.is_on)
+    rgb_color = property(lambda s: s._light.rgb_color)
 
     @property
     def supported_color_modes(self) -> set[ColorMode] | set[str] | None:
         return filter_supported_color_modes(
-            [COLOR_TRANSLATIONS[k] for k in self._light["supportAttributes"].split(",")]
+            [COLOR_TRANSLATIONS[k] for k in self._light.supported_color_modes]
         )
 
     @property
-    def brightness(self) -> int | None:
-        return math.ceil(int(self._light[PACKET_BRIGHTNESS]) / 100 * 255)
+    def supported_features(self) -> LightEntityFeature:
+        sengled_features = 0
+        if len(self._light.effect_list):
+            sengled_features |= LightEntityFeature.EFFECT
+        return super().supported_features
+
+    @property
+    def device_info(self) -> DeviceInfo | None:
+        return DeviceInfo(
+            manufacturer="Sengled",
+            model=self._light.model,
+            sw_version=self._light.sw_version,
+        )
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn on light."""
@@ -138,6 +119,12 @@ class BaseLight(LightEntity):
                     ),
                 }
             )
+        if ATTR_EFFECT in kwargs:
+            value = PACKET_VALUE_ON
+            if effect == "none":
+                effect = self.effect
+                value = PACKET_VALUE_OFF
+            messages.append({"type": effect, "value": value})
 
         if len(messages) == 0:
             _LOGGER.warning("Empty action from turn_on command: %r", kwargs)
@@ -171,47 +158,6 @@ class BaseLight(LightEntity):
             self.color_temp,
         )
 
-
-class WhiteLight(BaseLight):
-    """A Sengled wifi white light."""
-
-    @property
-    def color_temp(self) -> int | None:
-        return 370  # 2700k, but per model?
-
-
-class ColorLight(BaseLight):
-    """A Sengled wifi color light."""
-
-    # Figure out these ranges per light?
-    # 1,000,000 divided by 2700 Kelvin = 370 Mireds
-    _attr_max_mireds = 400
-    # _attr_min_mireds = 154  # 1,000,000 divided by 6500 Kelvin = 154 Mireds
-
-    @property
-    def rgb_color(self) -> tuple[int, int, int] | None:
-        return tuple(int(rgb) for rgb in self._light[PACKET_RGB_COLOR].split(":"))
-
-    @property
-    def color_temp(self) -> int | None:
-        return decode_color_temp(
-            self._light[PACKET_COLOR_TEMP],
-            self.min_mireds,
-            self.max_mireds,
-        )
-
-    @property
-    def color_mode(self) -> ColorMode | str | None:
-        match self._light[PACKET_COLOR_MODE]:
-            case "1":
-                return ColorMode.RGB
-            case "2":
-                return ColorMode.COLOR_TEMP
-
-    @property
-    def supported_features(self) -> LightEntityFeature:
-        return super().supported_features | LightEntityFeature.EFFECT
-
     @property
     def effect(self) -> str | None:
         return {
@@ -221,44 +167,7 @@ class ColorLight(BaseLight):
             "4": "christmas",
             "5": "halloween",
             "6": "festival",
-        }.get(self._light[PACKET_EFFECT], None)
-
-    @property
-    def effect_list(self) -> list[str] | None:
-        return [
-            "christmas",
-            "colorCycle",
-            "festival",
-            "halloween",
-            "randomColor",
-            "rhythm",
-            "none",
-        ]
-
-    async def async_turn_on(self, **kwargs: Any) -> None:
-        effect = kwargs.pop(ATTR_EFFECT, None)
-        if effect:
-            value = PACKET_VALUE_ON
-            if effect == "none":
-                effect = self.effect
-                value = PACKET_VALUE_OFF
-            await self._async_send_update(effect, value)
-        await super().async_turn_on(**kwargs)
-
-
-class UnknownLight(Exception):
-    """When we can't handle a light."""
-
-
-def build_light(api: API, packet: DiscoveryInfoType) -> BaseLight:
-    """Factory for bulbs."""
-    if PACKET_RGB_COLOR in packet:
-        return ColorLight(api, packet)
-    if PACKET_BRIGHTNESS in packet:
-        return WhiteLight(api, packet)
-
-    _LOGGER.warning("Couldn't build light for packet %s", packet)
-
+        }.get(self._light.get(PACKET_EFFECT, None), None)
 
 async def async_setup_platform(
     hass: HomeAssistant,
@@ -269,7 +178,7 @@ async def async_setup_platform(
     """Set up the Sengled platform."""
     api = hass.data[DOMAIN]
 
-    light = build_light(api, discovery_info)
+    light = Light(api, discovery_info)
     await api.async_register_light(light)
     add_entities([light])
     _LOGGER.info("Discovered light %r", light)
