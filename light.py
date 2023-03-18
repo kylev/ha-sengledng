@@ -21,6 +21,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 
 from .api import API
+from .api.light import create_light
 from .const import (
     ATTRIBUTION,
     DOMAIN,
@@ -67,7 +68,7 @@ class BaseLight(LightEntity):
     def __init__(self, api: API, info: DiscoveryInfoType) -> None:
         _LOGGER.debug("BaseLight init %r", info)
         self._api = api
-        self._light = info
+        self._light = create_light(info)
         self._device_id = info["deviceUuid"]
         self._attr_unique_id = info["deviceUuid"]
 
@@ -93,7 +94,7 @@ class BaseLight(LightEntity):
 
     @property
     def available(self) -> bool:
-        return self._light[PACKET_ONLINE] == PACKET_VALUE_ON
+        return self._light.available
 
     @property
     def supported_color_modes(self) -> set[ColorMode] | set[str] | None:
