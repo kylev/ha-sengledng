@@ -79,6 +79,7 @@ class API:
             if data["ret"] != 0:
                 raise AuthError("Login failed: {}".format(data["msg"]))
             self._jsession_id = data["jsessionId"]
+        _LOGGER.info("Authentication completed")
 
     async def _async_get_server_info(self):
         """Get secondary server info from the primary."""
@@ -111,6 +112,7 @@ class API:
             lights = tuple(self._lights.values())
         for light in lights:
             await self._subscribe_light(light)
+        _LOGGER.info("MQTT client ready")
 
     async def _async_discover_lights(self) -> list[DiscoveryInfoType]:
         """Get a list of HASS-friendly discovered devices."""
@@ -133,10 +135,10 @@ class API:
                 await self._async_setup_mqtt()
                 await self._message_loop()
             except mqtt.error.MqttConnectError as conerr:
-                _LOGGER.info("Re-authenticating after %r", conerr)
+                _LOGGER.info("MQTT refused, reauthenticating %r", conerr)
                 await self._async_login()
             except mqtt.MqttError as error:
-                _LOGGER.warning("Messaging stalled %r", error)
+                _LOGGER.info("MQTT error, reconnecting %r", error)
                 await asyncio.sleep(10)
 
     async def _message_loop(self):

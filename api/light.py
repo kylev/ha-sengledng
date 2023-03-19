@@ -23,7 +23,6 @@ from .const import (
     PACKET_VALUE_ON,
     PACKET_SWITCH,
     PACKET_MODEL,
-    PACKET_SW_VERSION,
 )
 
 
@@ -32,7 +31,6 @@ _LOGGER = logging.getLogger(__name__)
 
 def create_light(discovery: Any) -> SengledLight:
     """Create the appropriate API light for the discovery packet."""
-    # return SengledLight(discovery)
     if PACKET_RGB_COLOR in discovery:
         return ColorSengledLight(discovery)
     if PACKET_BRIGHTNESS in discovery:
