@@ -75,13 +75,14 @@ class Light(LightEntity):
     @property
     def supported_features(self) -> LightEntityFeature:
         sengled_features = 0
-        if len(self._light.effect_list):
+        if len(self.effect_list):
             sengled_features |= LightEntityFeature.EFFECT
-        return super().supported_features
+        return super().supported_features | sengled_features
 
     @property
     def device_info(self) -> DeviceInfo | None:
         return DeviceInfo(
+            identifiers={(DOMAIN, self.unique_id)},
             manufacturer="Sengled",
             model=self._light.model,
             sw_version=self._light.sw_version,
@@ -168,6 +169,7 @@ class Light(LightEntity):
             "5": "halloween",
             "6": "festival",
         }.get(self._light.get(PACKET_EFFECT, None), None)
+
 
 async def async_setup_platform(
     hass: HomeAssistant,
