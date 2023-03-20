@@ -1,5 +1,16 @@
-"""Internal, HASS-less interface."""
+"""API implmentation for SengledNG"""
+import asyncio
+from http import HTTPStatus
+import json
 import logging
+import ssl
+import time
+from typing import Any
+from urllib import parse
+import uuid
+
+import aiohttp
+import asyncio_mqtt as mqtt
 
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
