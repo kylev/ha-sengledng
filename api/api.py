@@ -60,6 +60,10 @@ class API:
         self._cookiejar = aiohttp.CookieJar()
         self._http = aiohttp.ClientSession(cookie_jar=self._cookiejar)
 
+    async def check_auth(username, password):
+        """See if it'll work."""
+        await API(None, username, password)._async_login()
+
     async def _async_login(self):
         url = "https://ucenter.cloud.sengled.com/user/app/customer/v2/AuthenCross.json"
         # For Zigbee? login_path = "/zigbee/customer/login.json"
@@ -138,7 +142,7 @@ class API:
                 _LOGGER.info("MQTT refused, reauthenticating %r", conerr)
                 await self._async_login()
             except mqtt.MqttError as error:
-                _LOGGER.info("MQTT error, reconnecting %r", error)
+                _LOGGER.info("MQTT dropped, waiting to reconnect %r", error)
                 await asyncio.sleep(10)
 
     async def _message_loop(self):
