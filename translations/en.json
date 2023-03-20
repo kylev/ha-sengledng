@@ -1,0 +1,13 @@
+{
+    "config": {
+        "step": {
+            "user": {
+                "description": "Enter your Sengled login credentials.",
+                "data": {
+                    "username": "Username (email)",
+                    "password": "Password"
+                }
+            }
+        }
+    }
+}
