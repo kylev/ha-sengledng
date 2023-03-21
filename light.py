@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import logging
-import math
 from typing import Any
 
 from homeassistant.components.light import (
@@ -20,18 +19,9 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 
 from .api import ElementsBulb, ElementsColorBulb
-from .const import (
-    ATTRIBUTION,
-    DOMAIN,
-)
+from .const import ATTRIBUTION, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
-
-COLOR_TRANSLATIONS = {
-    "brightness": ColorMode.BRIGHTNESS,
-    "color": ColorMode.RGB,
-    "colorTemperature": ColorMode.COLOR_TEMP,
-}
 
 
 class ElementsLightEntity(ElementsBulb, LightEntity):
@@ -103,9 +93,6 @@ class ElementsColorLightEntity(ElementsColorBulb, ElementsLightEntity):
     @property
     def supported_color_modes(self) -> set[ColorMode] | set[str] | None:
         return {ColorMode.BRIGHTNESS, ColorMode.COLOR_TEMP, ColorMode.RGB}
-
-    # @property
-    # def colo
 
 
 def pick_light(discovery: DiscoveryInfoType):
