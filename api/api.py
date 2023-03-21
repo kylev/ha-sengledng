@@ -66,7 +66,7 @@ class API:
             if data["ret"] != 0:
                 raise AuthError("Login failed: {}".format(data["msg"]))
             self._jsession_id = data["jsessionId"]
-        _LOGGER.info("Authentication completed")
+        _LOGGER.info("API login complete")
 
     async def _async_get_server_info(self):
         """Get secondary server info from the primary."""
@@ -76,6 +76,7 @@ class API:
             _LOGGER.debug("Raw server info %r", data)
             self._jbalancer_url = parse.urlparse(data["jbalancerAddr"])
             self._inception_url = parse.urlparse(data["inceptionAddr"])
+        _LOGGER.info("API server info acquired")
 
     async def _async_setup_mqtt(self):
         """Setup up MQTT client."""
@@ -110,6 +111,7 @@ class API:
                 self._hass.helpers.discovery.load_platform(
                     Platform.LIGHT, DOMAIN, device, {}
                 )
+        _LOGGER.info("API discovery complete")
 
     async def async_start(self):
         """Start the API's main event loop."""
@@ -187,7 +189,7 @@ class APIBulb:
     async def set_brightness(self, value: int) -> None:
         raise NotImplementedError("Bulbs must implement set_brightness")
 
-    async def set_color(self, value: tuple(int, int, int)) -> None:
+    async def set_color(self, value: tuple[int, int, int]) -> None:
         raise NotImplementedError("Bulbs must implement set_color")
 
     @property

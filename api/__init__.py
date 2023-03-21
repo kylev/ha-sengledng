@@ -3,7 +3,6 @@
 
 from .api import API, AuthError
 from .elements import ElementsBulb, ElementsColorBulb
-from .light import create_light
 
 
 __all__ = [
@@ -11,5 +10,4 @@ __all__ = [
     "AuthError",
     "ElementsBulb",
     "ElementsColorBulb",
-    "create_light",
 ]

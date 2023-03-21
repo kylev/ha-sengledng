@@ -4,20 +4,22 @@ from __future__ import annotations
 import math
 import logging
 import time
-from typing import Any
+from typing import Any, Final
+
 
 from .api import API, APIBulb
-from .const import (
-    PACKET_ONLINE,
-    PACKET_COLOR_TEMP,
-    PACKET_VALUE_ON,
-    PACKET_VALUE_OFF,
-    PACKET_SW_VERSION,
-    PACKET_SWITCH,
-    PACKET_RGB_COLOR,
-    PACKET_BRIGHTNESS,
-    PACKET_MODEL,
-)
+
+PACKET_BRIGHTNESS: Final = "brightness"
+PACKET_COLOR_MODE: Final = "colorMode"
+PACKET_COLOR_TEMP: Final = "colorTemperature"
+PACKET_EFFECT: Final = "effectStatus"
+PACKET_MODEL: Final = "typeCode"
+PACKET_ONLINE: Final = "online"
+PACKET_RGB_COLOR: Final = "color"
+PACKET_SW_VERSION: Final = "version"
+PACKET_SWITCH: Final = "switch"
+PACKET_VALUE_OFF: Final = "0"
+PACKET_VALUE_ON: Final = "1"
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -158,7 +160,7 @@ class ElementsColorBulb(ElementsBulb):
     def min_mireds(self):
         return 154
 
-    async def set_color(self, value: tuple(int, int, int)):
+    async def set_color(self, value: tuple[int, int, int]):
         await self._async_send_updates(
             {"type": PACKET_RGB_COLOR, "value": ":".join(str(v) for v in value)}
         )
