@@ -96,8 +96,14 @@ class ElementsColorLightEntity(ElementsColorBulb, ElementsLightEntity):
 
 
 def pick_light(discovery: DiscoveryInfoType):
-    if discovery["typeCode"] == "W21-N13":
-        return ElementsColorLightEntity
+    """Pick which light implementation to use."""
+    try:
+        if discovery["typeCode"] == "W21-N13":
+            return ElementsColorLightEntity
+    except KeyError:
+        return None
+
+    # Better default??
     return ElementsLightEntity
 
 
