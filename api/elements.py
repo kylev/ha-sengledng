@@ -7,7 +7,8 @@ import time
 from typing import Any, Final
 
 
-from .api import API, APIBulb
+from .api import API
+from .api_bulb import APIBulb
 
 PACKET_BRIGHTNESS: Final = "brightness"
 PACKET_COLOR_MODE: Final = "colorMode"
@@ -60,7 +61,7 @@ class ElementsBulb(APIBulb):
     _api: API  # Expected from mixed-in class
 
     def __init__(self, discovery) -> None:
-        _LOGGER.debug("Bulb init %r", discovery)
+        _LOGGER.debug("%s init %r", self.__class__.__name__, discovery)
         self._data = _hassify_discovery(discovery)
 
     @property
