@@ -16,6 +16,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.typing import DiscoveryInfoType
 
 from ..const import DOMAIN
+from .api_bulb import APIBulb
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -30,6 +31,7 @@ class API:
     _inception_url: parse.ParseResult | None = None
     _jbalancer_url: parse.ParseResult | None = None
     _jsession_id: str | None = None
+    _lights: dict[str, APIBulb]
     _mqtt: mqtt.Client | None = None
 
     def __init__(self, hass: HomeAssistant, username: str, password: str) -> None:
@@ -177,21 +179,3 @@ class API:
     async def shutdown(self):
         """Shutdown and tidy up."""
         await self._http.close()
-
-
-class APIBulb:
-    def update_bulb(self, payload: Any) -> None:
-        raise NotImplementedError("Bulbs must implement update_bulb")
-
-    async def set_power(self, to_on=True) -> None:
-        raise NotImplementedError("Bulbs must implement set_power")
-
-    async def set_brightness(self, value: int) -> None:
-        raise NotImplementedError("Bulbs must implement set_brightness")
-
-    async def set_color(self, value: tuple[int, int, int]) -> None:
-        raise NotImplementedError("Bulbs must implement set_color")
-
-    @property
-    def mqtt_topics(self) -> list[str]:
-        raise NotImplementedError("Bulbs must implement mqtt_topics")
