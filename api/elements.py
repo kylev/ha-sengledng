@@ -22,6 +22,10 @@ PACKET_SWITCH: Final = "switch"
 PACKET_VALUE_OFF: Final = "0"
 PACKET_VALUE_ON: Final = "1"
 
+HA_COLOR_MODE_BRIGHTNESS = "brightness"
+HA_COLOR_MODE_COLOR_TEMP = "color_temp"
+HA_COLOR_MODE_RGB = "rgb"
+
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -84,6 +88,13 @@ class ElementsBulb(APIBulb):
     @property
     def brightness(self) -> int | None:
         return math.ceil(int(self._data[PACKET_BRIGHTNESS]) / 100 * 255)
+
+    @property
+    def color_mode(self) -> str | None:
+        return {
+            "1": HA_COLOR_MODE_RGB,
+            "2": HA_COLOR_MODE_COLOR_TEMP
+        }.get(self._data.get(PACKET_COLOR_MODE), HA_COLOR_MODE_BRIGHTNESS)
 
     @property
     def sw_version(self) -> str:
@@ -160,6 +171,10 @@ class ElementsColorBulb(ElementsBulb):
     @property
     def min_mireds(self):
         return 154
+
+    @property
+    def rgb_color(self) -> tuple[int, int, int] | None:
+        return tuple(int(rgb) for rgb in self._data[PACKET_RGB_COLOR].split(":"))
 
     async def set_color(self, value: tuple[int, int, int]):
         await self._async_send_updates(
