@@ -18,7 +18,7 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 
-from .api import ElementsBulb, ElementsColorBulb
+from .api import ElementsBulb, ElementsColorBulb, ZigbeeBulb
 from .const import ATTRIBUTION, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
@@ -95,16 +95,24 @@ class ElementsColorLightEntity(ElementsColorBulb, ElementsLightEntity):
         return {ColorMode.BRIGHTNESS, ColorMode.COLOR_TEMP, ColorMode.RGB}
 
 
+class ZigbeeLightEntity(ZigbeeBulb, LightEntity):
+    """A bulb."""
+
+    def __init__(self, api, discovery) -> None:
+        super().__init__(discovery)
+        self._api = api
+
+
 def pick_light(discovery: DiscoveryInfoType):
     """Pick which light implementation to use."""
-    try:
+    if "typeCode" in discovery:
         if discovery["typeCode"] == "W21-N13":
             return ElementsColorLightEntity
-    except KeyError:
-        return None
-
-    # Better default??
-    return ElementsLightEntity
+        if discovery["typeCode"] == "W21-N11":
+            return ElementsLightEntity
+    if "supportAttributes" in discovery:
+        return ZigbeeLightEntity
+    return None
 
 
 async def async_setup_platform(
@@ -116,7 +124,11 @@ async def async_setup_platform(
     """Set up the Sengled platform."""
     api = hass.data[DOMAIN]
 
-    light = pick_light(discovery_info)(api, discovery_info)
+    clazz = pick_light(discovery_info)
+    if clazz is None:
+        _LOGGER.warning("Unsupported device discovered: %r", discovery_info)
+        return
+    light = clazz(api, discovery_info)
     await api.async_register_light(light)
     add_entities([light])
     _LOGGER.info("Discovered light %r", light)

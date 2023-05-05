@@ -115,11 +115,24 @@ class API:
                 )
         _LOGGER.info("API discovery complete")
 
+    async def _async_discover_zigbee(self) -> list[dict]:
+        url = "https://element.cloud.sengled.com/zigbee/device/getDeviceDetails.json"
+        async with self._http.post(url) as resp:
+            data = await resp.json()
+            for hub in data["deviceInfos"]:
+                for device in hub["lampInfos"]:
+                    self._hass.helpers.discovery.load_platform(
+                        Platform.LIGHT, DOMAIN, device, {}
+                    )
+
+            _LOGGER.error("Zigbee discovery complete %r", data)
+
     async def async_start(self):
         """Start the API's main event loop."""
         await self._async_login()
         await self._async_get_server_info()
         await self._async_discover_lights()
+        await self._async_discover_zigbee()
 
         while True:
             try:

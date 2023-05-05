@@ -1,0 +1,4 @@
+pytest==7.2.2
+# Apparently a shadow requirement of pytest?
+sqlalchemy==2.0.6
+voluptuous==0.13.1

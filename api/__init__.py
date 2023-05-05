@@ -3,6 +3,7 @@
 
 from .api import API, AuthError
 from .elements import ElementsBulb, ElementsColorBulb
+from .zigbee import ZigbeeBulb, ZigbeeColorBulb
 
 
 __all__ = [
@@ -10,4 +11,6 @@ __all__ = [
     "AuthError",
     "ElementsBulb",
     "ElementsColorBulb",
+    "ZigbeeBulb",
+    "ZigbeeColorBulb",
 ]
